@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 class QuillIconButton extends StatelessWidget {
   const QuillIconButton({
@@ -22,15 +22,15 @@ class QuillIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ConstrainedBox(
       constraints: BoxConstraints.tightFor(width: size, height: size),
-      child: RawMaterialButton(
-        visualDensity: VisualDensity.compact,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
-        fillColor: fillColor,
-        elevation: 0,
-        hoverElevation: hoverElevation,
-        highlightElevation: hoverElevation,
-        onPressed: onPressed,
-        child: icon,
+      child: GestureDetector(
+        onTap: onPressed,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(2),
+            color: fillColor,
+          ),
+          child: icon,
+        ),
       ),
     );
   }

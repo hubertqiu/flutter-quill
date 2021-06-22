@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:filesystem_picker/filesystem_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -34,14 +35,12 @@ class _HomePageState extends State<HomePage> {
       final result = await rootBundle.loadString('assets/sample_data.json');
       final doc = Document.fromJson(jsonDecode(result));
       setState(() {
-        _controller = QuillController(
-            document: doc, selection: const TextSelection.collapsed(offset: 0));
+        _controller = QuillController(document: doc, selection: const TextSelection.collapsed(offset: 0));
       });
     } catch (error) {
       final doc = Document()..insert(0, 'Empty asset');
       setState(() {
-        _controller = QuillController(
-            document: doc, selection: const TextSelection.collapsed(offset: 0));
+        _controller = QuillController(document: doc, selection: const TextSelection.collapsed(offset: 0));
       });
     }
   }
@@ -49,36 +48,23 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     if (_controller == null) {
-      return const Scaffold(body: Center(child: Text('Loading...')));
+      return const CupertinoPageScaffold(child: Center(child: Text('Loading...')));
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.grey.shade800,
-        elevation: 0,
-        centerTitle: false,
-        title: const Text(
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(
           'Flutter Quill',
+          // style: Styles.navBarText,
         ),
-        actions: [],
+        // backgroundColor: Styles.activeColor,
       ),
-      drawer: Container(
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-        color: Colors.grey.shade800,
-        child: _buildMenuBar(context),
-      ),
-      body: RawKeyboardListener(
+      child: RawKeyboardListener(
         focusNode: FocusNode(),
         onKey: (event) {
           if (event.data.isControlPressed && event.character == 'b') {
-            if (_controller!
-                .getSelectionStyle()
-                .attributes
-                .keys
-                .contains('bold')) {
-              _controller!
-                  .formatSelection(Attribute.clone(Attribute.bold, null));
+            if (_controller!.getSelectionStyle().attributes.keys.contains('bold')) {
+              _controller!.formatSelection(Attribute.clone(Attribute.bold, null));
             } else {
               _controller!.formatSelection(Attribute.bold);
             }
@@ -139,8 +125,7 @@ class _HomePageState extends State<HomePage> {
           ),
           embedBuilder: defaultEmbedBuilderWeb);
     }
-    var toolbar = QuillToolbar.basic(
-        controller: _controller!, onImagePickCallback: _onImagePickCallback);
+    var toolbar = QuillToolbar.basic(controller: _controller!, onImagePickCallback: _onImagePickCallback);
     final isDesktop = !kIsWeb && !Platform.isAndroid && !Platform.isIOS;
     if (isDesktop) {
       toolbar = QuillToolbar.basic(
@@ -164,8 +149,7 @@ class _HomePageState extends State<HomePage> {
           kIsWeb
               ? Expanded(
                   child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                   child: toolbar,
                 ))
               : Container(child: toolbar)
@@ -189,8 +173,7 @@ class _HomePageState extends State<HomePage> {
   Future<String> _onImagePickCallback(File file) async {
     // Copies the picked file from temporary cache to applications directory
     final appDocDir = await getApplicationDocumentsDirectory();
-    final copiedFile =
-        await file.copy('${appDocDir.path}/${basename(file.path)}');
+    final copiedFile = await file.copy('${appDocDir.path}/${basename(file.path)}');
     return copiedFile.path.toString();
   }
 

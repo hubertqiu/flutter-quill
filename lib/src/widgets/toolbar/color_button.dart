@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 import '../../models/documents/attribute.dart';
@@ -40,14 +41,10 @@ class _ColorButtonState extends State<ColorButton> {
 
   void _didChangeEditingValue() {
     setState(() {
-      _isToggledColor =
-          _getIsToggledColor(widget.controller.getSelectionStyle().attributes);
-      _isToggledBackground = _getIsToggledBackground(
-          widget.controller.getSelectionStyle().attributes);
-      _isWhite = _isToggledColor &&
-          _selectionStyle.attributes['color']!.value == '#ffffff';
-      _isWhitebackground = _isToggledBackground &&
-          _selectionStyle.attributes['background']!.value == '#ffffff';
+      _isToggledColor = _getIsToggledColor(widget.controller.getSelectionStyle().attributes);
+      _isToggledBackground = _getIsToggledBackground(widget.controller.getSelectionStyle().attributes);
+      _isWhite = _isToggledColor && _selectionStyle.attributes['color']!.value == '#ffffff';
+      _isWhitebackground = _isToggledBackground && _selectionStyle.attributes['background']!.value == '#ffffff';
     });
   }
 
@@ -56,10 +53,8 @@ class _ColorButtonState extends State<ColorButton> {
     super.initState();
     _isToggledColor = _getIsToggledColor(_selectionStyle.attributes);
     _isToggledBackground = _getIsToggledBackground(_selectionStyle.attributes);
-    _isWhite = _isToggledColor &&
-        _selectionStyle.attributes['color']!.value == '#ffffff';
-    _isWhitebackground = _isToggledBackground &&
-        _selectionStyle.attributes['background']!.value == '#ffffff';
+    _isWhite = _isToggledColor && _selectionStyle.attributes['color']!.value == '#ffffff';
+    _isWhitebackground = _isToggledBackground && _selectionStyle.attributes['background']!.value == '#ffffff';
     widget.controller.addListener(_didChangeEditingValue);
   }
 
@@ -78,12 +73,9 @@ class _ColorButtonState extends State<ColorButton> {
       oldWidget.controller.removeListener(_didChangeEditingValue);
       widget.controller.addListener(_didChangeEditingValue);
       _isToggledColor = _getIsToggledColor(_selectionStyle.attributes);
-      _isToggledBackground =
-          _getIsToggledBackground(_selectionStyle.attributes);
-      _isWhite = _isToggledColor &&
-          _selectionStyle.attributes['color']!.value == '#ffffff';
-      _isWhitebackground = _isToggledBackground &&
-          _selectionStyle.attributes['background']!.value == '#ffffff';
+      _isToggledBackground = _getIsToggledBackground(_selectionStyle.attributes);
+      _isWhite = _isToggledColor && _selectionStyle.attributes['color']!.value == '#ffffff';
+      _isWhitebackground = _isToggledBackground && _selectionStyle.attributes['background']!.value == '#ffffff';
     }
   }
 
@@ -95,31 +87,25 @@ class _ColorButtonState extends State<ColorButton> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final color = CupertinoTheme.of(context).primaryColor;
+    final backgroundColor = CupertinoTheme.of(context).scaffoldBackgroundColor;
     final iconColor = _isToggledColor && !widget.background && !_isWhite
         ? stringToColor(_selectionStyle.attributes['color']!.value)
-        : theme.iconTheme.color;
+        : color;
 
-    final iconColorBackground =
-        _isToggledBackground && widget.background && !_isWhitebackground
-            ? stringToColor(_selectionStyle.attributes['background']!.value)
-            : theme.iconTheme.color;
+    final iconColorBackground = _isToggledBackground && widget.background && !_isWhitebackground
+        ? stringToColor(_selectionStyle.attributes['background']!.value)
+        : color;
 
-    final fillColor = _isToggledColor && !widget.background && _isWhite
-        ? stringToColor('#ffffff')
-        : theme.canvasColor;
+    final fillColor = _isToggledColor && !widget.background && _isWhite ? stringToColor('#ffffff') : backgroundColor;
     final fillColorBackground =
-        _isToggledBackground && widget.background && _isWhitebackground
-            ? stringToColor('#ffffff')
-            : theme.canvasColor;
+        _isToggledBackground && widget.background && _isWhitebackground ? stringToColor('#ffffff') : backgroundColor;
 
     return QuillIconButton(
       highlightElevation: 0,
       hoverElevation: 0,
       size: widget.iconSize * kIconButtonFactor,
-      icon: Icon(widget.icon,
-          size: widget.iconSize,
-          color: widget.background ? iconColorBackground : iconColor),
+      icon: Icon(widget.icon, size: widget.iconSize, color: widget.background ? iconColorBackground : iconColor),
       fillColor: widget.background ? fillColorBackground : fillColor,
       onPressed: _showColorPicker,
     );
@@ -131,22 +117,24 @@ class _ColorButtonState extends State<ColorButton> {
       hex = hex.substring(2);
     }
     hex = '#$hex';
-    widget.controller.formatSelection(
-        widget.background ? BackgroundAttribute(hex) : ColorAttribute(hex));
+    widget.controller.formatSelection(widget.background ? BackgroundAttribute(hex) : ColorAttribute(hex));
     Navigator.of(context).pop();
   }
 
   void _showColorPicker() {
-    showDialog(
+    final size = MediaQuery.of(context).size;
+    final backgroundColor = CupertinoTheme.of(context).scaffoldBackgroundColor;
+    showCupertinoModalPopup(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Color'),
-        backgroundColor: Theme.of(context).canvasColor,
-        content: SingleChildScrollView(
-          child: MaterialPicker(
-            pickerColor: const Color(0x00000000),
-            onColorChanged: (color) => _changeColor(context, color),
-          ),
+      builder: (BuildContext context) => Container(
+        margin: EdgeInsets.all(56),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: MaterialPicker(
+          pickerColor: const Color(0x00000000),
+          onColorChanged: (color) => _changeColor(context, color),
         ),
       ),
     );

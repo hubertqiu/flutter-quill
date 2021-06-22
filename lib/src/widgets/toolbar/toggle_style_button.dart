@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/documents/attribute.dart';
@@ -56,10 +57,8 @@ class _ToggleStyleButtonState extends State<ToggleStyleButton> {
 
   @override
   Widget build(BuildContext context) {
-    final isInCodeBlock =
-        _selectionStyle.attributes.containsKey(Attribute.codeBlock.key);
-    final isEnabled =
-        !isInCodeBlock || widget.attribute.key == Attribute.codeBlock.key;
+    final isInCodeBlock = _selectionStyle.attributes.containsKey(Attribute.codeBlock.key);
+    final isEnabled = !isInCodeBlock || widget.attribute.key == Attribute.codeBlock.key;
     return widget.childBuilder(
       context,
       widget.attribute,
@@ -103,9 +102,7 @@ class _ToggleStyleButtonState extends State<ToggleStyleButton> {
   }
 
   void _toggleAttribute() {
-    widget.controller.formatSelection(_isToggled!
-        ? Attribute.clone(widget.attribute, null)
-        : widget.attribute);
+    widget.controller.formatSelection(_isToggled! ? Attribute.clone(widget.attribute, null) : widget.attribute);
   }
 }
 
@@ -118,16 +115,18 @@ Widget defaultToggleStyleButtonBuilder(
   VoidCallback? onPressed, [
   double iconSize = kDefaultIconSize,
 ]) {
-  final theme = Theme.of(context);
+  final theme = CupertinoTheme.of(context);
   final isEnabled = onPressed != null;
   final iconColor = isEnabled
       ? isToggled == true
-          ? theme.primaryIconTheme.color
-          : theme.iconTheme.color
-      : theme.disabledColor;
-  final fill = isToggled == true
-      ? theme.toggleableActiveColor
-      : fillColor ?? theme.canvasColor;
+          ? theme.textTheme.textStyle.color
+          : theme.primaryColor
+      : theme.primaryColor.withOpacity(0.3);
+  final fill = isEnabled
+      ? isToggled == true
+          ? theme.primaryColor
+          : fillColor ?? theme.scaffoldBackgroundColor
+      : theme.primaryColor.withOpacity(0.3);
   return QuillIconButton(
     highlightElevation: 0,
     hoverElevation: 0,

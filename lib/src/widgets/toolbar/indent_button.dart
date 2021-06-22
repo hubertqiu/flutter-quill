@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../../flutter_quill.dart';
 import 'quill_icon_button.dart';
@@ -24,9 +25,8 @@ class IndentButton extends StatefulWidget {
 class _IndentButtonState extends State<IndentButton> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final iconColor = theme.iconTheme.color;
-    final fillColor = theme.canvasColor;
+    final iconColor = CupertinoTheme.of(context).primaryColor;
+    final fillColor = CupertinoTheme.of(context).scaffoldBackgroundColor;
     return QuillIconButton(
       highlightElevation: 0,
       hoverElevation: 0,
@@ -34,9 +34,7 @@ class _IndentButtonState extends State<IndentButton> {
       icon: Icon(widget.icon, size: widget.iconSize, color: iconColor),
       fillColor: fillColor,
       onPressed: () {
-        final indent = widget.controller
-            .getSelectionStyle()
-            .attributes[Attribute.indent.key];
+        final indent = widget.controller.getSelectionStyle().attributes[Attribute.indent.key];
         if (indent == null) {
           if (widget.isIncrease) {
             widget.controller.formatSelection(Attribute.indentL1);
@@ -44,17 +42,14 @@ class _IndentButtonState extends State<IndentButton> {
           return;
         }
         if (indent.value == 1 && !widget.isIncrease) {
-          widget.controller
-              .formatSelection(Attribute.clone(Attribute.indentL1, null));
+          widget.controller.formatSelection(Attribute.clone(Attribute.indentL1, null));
           return;
         }
         if (widget.isIncrease) {
-          widget.controller
-              .formatSelection(Attribute.getIndentLevel(indent.value + 1));
+          widget.controller.formatSelection(Attribute.getIndentLevel(indent.value + 1));
           return;
         }
-        widget.controller
-            .formatSelection(Attribute.getIndentLevel(indent.value - 1));
+        widget.controller.formatSelection(Attribute.getIndentLevel(indent.value - 1));
       },
     );
   }
