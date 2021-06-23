@@ -7,7 +7,7 @@ import '../models/documents/attribute.dart';
 import '../models/documents/nodes/block.dart';
 import '../models/documents/nodes/line.dart';
 import 'box.dart';
-import 'check_box.dart';
+import 'magic_widget/check_box.dart';
 import 'cursor.dart';
 import 'default_styles.dart';
 import 'delegate.dart';
@@ -662,9 +662,9 @@ class _Checkbox extends StatelessWidget {
       padding: const EdgeInsetsDirectional.only(end: 13),
       child: GestureDetector(
         onLongPress: () => _onCheckboxClicked(!isChecked),
-        child: RoundCheckBox(
-          isChecked: isChecked,
-          onTap: _onCheckboxClicked,
+        child: MagicCheckbox(
+          value: isChecked,
+          onChanged: _onCheckboxClicked,
         ),
       ),
     );
