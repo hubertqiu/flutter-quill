@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:tuple/tuple.dart';
 
 import '../quill_delta.dart';
 import '../rules/rule.dart';
 import 'attribute.dart';
+import 'convertor/delta_convertor.dart';
 import 'history.dart';
 import 'nodes/block.dart';
 import 'nodes/container.dart';
@@ -38,21 +40,25 @@ class Document {
 
   Delta toDelta() => Delta.from(_delta);
 
+  String toMarkdown() {
+    final jsonString = jsonEncode(Delta.from(_delta).toJson());
+    final markdown = DeltaConvertor(jsonString).convert();
+    return markdown;
+  }
+
   final Rules _rules = Rules.getInstance();
 
   void setCustomRules(List<Rule> customRules) {
     _rules.setCustomRules(customRules);
   }
 
-  final StreamController<Tuple3<Delta, Delta, ChangeSource>> _observer =
-      StreamController.broadcast();
+  final StreamController<Tuple3<Delta, Delta, ChangeSource>> _observer = StreamController.broadcast();
 
   final History _history = History();
 
   Stream<Tuple3<Delta, Delta, ChangeSource>> get changes => _observer.stream;
 
-  Delta insert(int index, Object? data,
-      {int replaceLength = 0, bool autoAppendNewlineAfterImage = true}) {
+  Delta insert(int index, Object? data, {int replaceLength = 0, bool autoAppendNewlineAfterImage = true}) {
     assert(index >= 0);
     assert(data is String || data is Embeddable);
     if (data is Embeddable) {
@@ -61,10 +67,8 @@ class Document {
       return Delta();
     }
 
-    final delta = _rules.apply(RuleType.INSERT, this, index,
-        data: data, len: replaceLength);
-    compose(delta, ChangeSource.LOCAL,
-        autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
+    final delta = _rules.apply(RuleType.INSERT, this, index, data: data, len: replaceLength);
+    compose(delta, ChangeSource.LOCAL, autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
     return delta;
   }
 
@@ -77,8 +81,7 @@ class Document {
     return delta;
   }
 
-  Delta replace(int index, int len, Object? data,
-      {bool autoAppendNewlineAfterImage = true}) {
+  Delta replace(int index, int len, Object? data, {bool autoAppendNewlineAfterImage = true}) {
     assert(index >= 0);
     assert(data is String || data is Embeddable);
 
@@ -91,9 +94,7 @@ class Document {
     // We have to insert before applying delete rules
     // Otherwise delete would be operating on stale document snapshot.
     if (dataIsNotEmpty) {
-      delta = insert(index, data,
-          replaceLength: len,
-          autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
+      delta = insert(index, data, replaceLength: len, autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
     }
 
     if (len > 0) {
@@ -109,8 +110,7 @@ class Document {
 
     var delta = Delta();
 
-    final formatDelta = _rules.apply(RuleType.FORMAT, this, index,
-        len: len, attribute: attribute);
+    final formatDelta = _rules.apply(RuleType.FORMAT, this, index, len: len, attribute: attribute);
     if (formatDelta.isNotEmpty) {
       compose(formatDelta, ChangeSource.LOCAL);
       delta = delta.compose(formatDelta);
@@ -133,19 +133,16 @@ class Document {
     return block.queryChild(res.offset, true);
   }
 
-  void compose(Delta delta, ChangeSource changeSource,
-      {bool autoAppendNewlineAfterImage = true}) {
+  void compose(Delta delta, ChangeSource changeSource, {bool autoAppendNewlineAfterImage = true}) {
     assert(!_observer.isClosed);
     delta.trim();
     assert(delta.isNotEmpty);
 
     var offset = 0;
-    delta = _transform(delta,
-        autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
+    delta = _transform(delta, autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
     final originalDelta = toDelta();
     for (final op in delta.toList()) {
-      final style =
-          op.attributes != null ? Style.fromJson(op.attributes) : null;
+      final style = op.attributes != null ? Style.fromJson(op.attributes) : null;
 
       if (op.isInsert) {
         _root.insert(offset, _normalize(op.data), style);
@@ -185,8 +182,7 @@ class Document {
 
   bool get hasRedo => _history.hasRedo;
 
-  static Delta _transform(Delta delta,
-      {bool autoAppendNewlineAfterImage = true}) {
+  static Delta _transform(Delta delta, {bool autoAppendNewlineAfterImage = true}) {
     final res = Delta();
     final ops = delta.toList();
     for (var i = 0; i < ops.length; i++) {
@@ -199,14 +195,9 @@ class Document {
     return res;
   }
 
-  static void _autoAppendNewlineAfterImage(
-      int i, List<Operation> ops, Operation op, Delta res) {
-    final nextOpIsImage =
-        i + 1 < ops.length && ops[i + 1].isInsert && ops[i + 1].data is! String;
-    if (nextOpIsImage &&
-        op.data is String &&
-        (op.data as String).isNotEmpty &&
-        !(op.data as String).endsWith('\n')) {
+  static void _autoAppendNewlineAfterImage(int i, List<Operation> ops, Operation op, Delta res) {
+    final nextOpIsImage = i + 1 < ops.length && ops[i + 1].isInsert && ops[i + 1].data is! String;
+    if (nextOpIsImage && op.data is String && (op.data as String).isNotEmpty && !(op.data as String).endsWith('\n')) {
       res.push(Operation.insert('\n'));
     }
     // Currently embed is equivalent to image and hence `is! String`
@@ -249,20 +240,15 @@ class Document {
     var offset = 0;
     for (final op in doc.toList()) {
       if (!op.isInsert) {
-        throw ArgumentError.value(doc,
-            'Document can only contain insert operations but ${op.key} found.');
+        throw ArgumentError.value(doc, 'Document can only contain insert operations but ${op.key} found.');
       }
-      final style =
-          op.attributes != null ? Style.fromJson(op.attributes) : null;
+      final style = op.attributes != null ? Style.fromJson(op.attributes) : null;
       final data = _normalize(op.data);
       _root.insert(offset, data, style);
       offset += op.length!;
     }
     final node = _root.last;
-    if (node is Line &&
-        node.parent is! Block &&
-        node.style.isEmpty &&
-        _root.childCount > 1) {
+    if (node is Line && node.parent is! Block && node.style.isEmpty && _root.childCount > 1) {
       _root.remove(node);
     }
   }
@@ -278,9 +264,7 @@ class Document {
     }
 
     final delta = node.toDelta();
-    return delta.length == 1 &&
-        delta.first.data == '\n' &&
-        delta.first.key == 'insert';
+    return delta.length == 1 && delta.first.data == '\n' && delta.first.key == 'insert';
   }
 }
 

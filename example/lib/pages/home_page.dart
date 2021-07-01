@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:tuple/tuple.dart';
 
 import '../universal_ui/universal_ui.dart';
+import 'preview_page.dart';
 import 'read_only_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -57,6 +58,9 @@ class _HomePageState extends State<HomePage> {
           'Flutter Quill',
           // style: Styles.navBarText,
         ),
+        trailing: buildNavBarTextItem(context, '预览', true, MainAxisAlignment.end, () {
+          _preview();
+        }),
         // backgroundColor: Styles.activeColor,
       ),
       child: RawKeyboardListener(
@@ -73,6 +77,34 @@ class _HomePageState extends State<HomePage> {
         child: _buildWelcomeEditor(context),
       ),
     );
+  }
+
+  static Widget buildNavBarTextItem(
+      BuildContext context, String title, bool enabled, MainAxisAlignment mainAxisAlignment, VoidCallback callback) {
+    var navItem = GestureDetector(
+      onTap: () {
+        if (enabled && callback != null) {
+          callback();
+        }
+      },
+      child: Container(
+        width: 64,
+        color: CupertinoTheme.of(context).barBackgroundColor,
+        child: Row(
+          mainAxisAlignment: mainAxisAlignment,
+          children: [
+            Container(
+              // padding: EdgeInsets.only(bottom: 3),
+              child: Text(title,
+                  style: TextStyle(
+                    color: CupertinoColors.white,
+                  )),
+            ),
+          ],
+        ),
+      ),
+    );
+    return navItem;
   }
 
   Widget _buildWelcomeEditor(BuildContext context) {
@@ -214,6 +246,19 @@ class _HomePageState extends State<HomePage> {
       super.context,
       MaterialPageRoute(
         builder: (context) => ReadOnlyPage(),
+      ),
+    );
+  }
+
+  void _preview() {
+    String jsonString = jsonEncode(_controller!.document.toDelta().toJson());
+    String markdown = DeltaConvertor(jsonString).convert();
+    print("\n" + markdown);
+    // return;
+    Navigator.push(
+      super.context,
+      CupertinoPageRoute(
+        builder: (context) => PreviewPage(markdown),
       ),
     );
   }
