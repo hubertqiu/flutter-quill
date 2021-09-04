@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:math' as math;
-import 'dart:io' show Platform;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -18,6 +17,7 @@ import '../models/documents/nodes/container.dart' as container_node;
 import '../models/documents/nodes/embed.dart';
 import '../models/documents/nodes/leaf.dart' as leaf;
 import '../models/documents/nodes/line.dart';
+import '../utils/string_helper.dart';
 import 'box.dart';
 import 'controller.dart';
 import 'cursor.dart';
@@ -26,6 +26,8 @@ import 'delegate.dart';
 import 'image.dart';
 import 'raw_editor.dart';
 import 'text_selection.dart';
+import 'video_app.dart';
+import 'youtube_video_app.dart';
 
 const linkPrefixes = [
   'mailto:', // email
@@ -45,6 +47,8 @@ const linkPrefixes = [
 ];
 
 abstract class EditorState extends State<RawEditor> {
+  ScrollController get scrollController;
+
   TextEditingValue getTextEditingValue();
 
   void setTextEditingValue(TextEditingValue value);
@@ -60,31 +64,75 @@ abstract class EditorState extends State<RawEditor> {
   void requestKeyboard();
 }
 
+/// Base interface for editable render objects.
 abstract class RenderAbstractEditor {
   TextSelection selectWordAtPosition(TextPosition position);
 
   TextSelection selectLineAtPosition(TextPosition position);
 
+  /// Returns preferred line height at specified `position` in text.
   double preferredLineHeight(TextPosition position);
 
+  /// Returns [Rect] for caret in local coordinates
+  ///
+  /// Useful to enforce visibility of full caret at given position
+  Rect getLocalRectForCaret(TextPosition position);
+
+  /// Returns the local coordinates of the endpoints of the given selection.
+  ///
+  /// If the selection is collapsed (and therefore occupies a single point), the
+  /// returned list is of length one. Otherwise, the selection is not collapsed
+  /// and the returned list is of length two. In this case, however, the two
+  /// points might actually be co-located (e.g., because of a bidirectional
+  /// selection that contains some text but whose ends meet in the middle).
   TextPosition getPositionForOffset(Offset offset);
 
-  List<TextSelectionPoint> getEndpointsForSelection(TextSelection textSelection);
+  List<TextSelectionPoint> getEndpointsForSelection(
+      TextSelection textSelection);
 
+  /// If [ignorePointer] is false (the default) then this method is called by
+  /// the internal gesture recognizer's [TapGestureRecognizer.onTapDown]
+  /// callback.
+  ///
+  /// When [ignorePointer] is true, an ancestor widget must respond to tap
+  /// down events by calling this method.
   void handleTapDown(TapDownDetails details);
 
+  /// Selects the set words of a paragraph in a given range of global positions.
+  ///
+  /// The first and last endpoints of the selection will always be at the
+  /// beginning and end of a word respectively.
+  ///
+  /// {@macro flutter.rendering.editable.select}
   void selectWordsInRange(
     Offset from,
     Offset to,
     SelectionChangedCause cause,
   );
 
+  /// Move the selection to the beginning or end of a word.
+  ///
+  /// {@macro flutter.rendering.editable.select}
   void selectWordEdge(SelectionChangedCause cause);
 
+  /// Select text between the global positions [from] and [to].
   void selectPositionAt(Offset from, Offset to, SelectionChangedCause cause);
 
+  /// Select a word around the location of the last tap down.
+  ///
+  /// {@macro flutter.rendering.editable.select}
   void selectWord(SelectionChangedCause cause);
 
+  /// Move selection to the location of the last tap down.
+  ///
+  /// {@template flutter.rendering.editable.select}
+  /// This method is mainly used to translate user inputs in global positions
+  /// into a [TextSelection]. When used in conjunction with a [EditableText],
+  /// the selection change is fed back into [TextEditingController.selection].
+  ///
+  /// If you have a [TextEditingController], it's generally easier to
+  /// programmatically manipulate its `value` or `selection` directly.
+  /// {@endtemplate}
   void selectPosition(SelectionChangedCause cause);
 }
 
@@ -95,16 +143,78 @@ String _standardizeImageUrl(String url) {
   return url;
 }
 
-Widget _defaultEmbedBuilder(BuildContext context, leaf.Embed node) {
+bool _isMobile() => io.Platform.isAndroid || io.Platform.isIOS;
+
+Widget _defaultEmbedBuilder(
+    BuildContext context, leaf.Embed node, bool readOnly) {
   assert(!kIsWeb, 'Please provide EmbedBuilder for Web');
   switch (node.value.type) {
     case 'image':
       final imageUrl = _standardizeImageUrl(node.value.data);
+
+      final style = node.style.attributes['style'];
+      if (_isMobile() && style != null) {
+        final _attrs = parseKeyValuePairs(style.value.toString(),
+            {'mobileWidth', 'mobileHeight', 'mobileMargin', 'mobileAlignment'});
+        if (_attrs.isNotEmpty) {
+          assert(
+              _attrs['mobileWidth'] != null && _attrs['mobileHeight'] != null,
+              'mobileWidth and mobileHeight must be specified');
+          final w = double.parse(_attrs['mobileWidth']!);
+          final h = double.parse(_attrs['mobileHeight']!);
+          final m = _attrs['mobileMargin'] == null
+              ? 0.0
+              : double.parse(_attrs['mobileMargin']!);
+          var a = Alignment.center;
+          if (_attrs['mobileAlignment'] != null) {
+            final _index = [
+              'topLeft',
+              'topCenter',
+              'topRight',
+              'centerLeft',
+              'center',
+              'centerRight',
+              'bottomLeft',
+              'bottomCenter',
+              'bottomRight'
+            ].indexOf(_attrs['mobileAlignment']!);
+            if (_index >= 0) {
+              a = [
+                Alignment.topLeft,
+                Alignment.topCenter,
+                Alignment.topRight,
+                Alignment.centerLeft,
+                Alignment.center,
+                Alignment.centerRight,
+                Alignment.bottomLeft,
+                Alignment.bottomCenter,
+                Alignment.bottomRight
+              ][_index];
+            }
+          }
+          return Padding(
+              padding: EdgeInsets.all(m),
+              child: imageUrl.startsWith('http')
+                  ? Image.network(imageUrl, width: w, height: h, alignment: a)
+                  : isBase64(imageUrl)
+                      ? Image.memory(base64.decode(imageUrl),
+                          width: w, height: h, alignment: a)
+                      : Image.file(io.File(imageUrl),
+                          width: w, height: h, alignment: a));
+        }
+      }
       return imageUrl.startsWith('http')
           ? Image.network(imageUrl)
           : isBase64(imageUrl)
               ? Image.memory(base64.decode(imageUrl))
               : Image.file(io.File(imageUrl));
+    case 'video':
+      final videoUrl = node.value.data;
+      if (videoUrl.contains('youtube.com') || videoUrl.contains('youtu.be')) {
+        return YoutubeVideoApp(
+            videoUrl: videoUrl, context: context, readOnly: readOnly);
+      }
+      return VideoApp(videoUrl: videoUrl, context: context, readOnly: readOnly);
     default:
       throw UnimplementedError(
         'Embeddable type "${node.value.type}" is not supported by default '
@@ -141,7 +251,9 @@ class QuillEditor extends StatefulWidget {
       this.onSingleLongTapStart,
       this.onSingleLongTapMoveUpdate,
       this.onSingleLongTapEnd,
-      this.embedBuilder = _defaultEmbedBuilder});
+      this.embedBuilder = _defaultEmbedBuilder,
+      this.customStyleBuilder,
+      Key? key});
 
   factory QuillEditor.basic({
     required QuillController controller,
@@ -179,39 +291,50 @@ class QuillEditor extends StatefulWidget {
   final ScrollPhysics? scrollPhysics;
   final ValueChanged<String>? onLaunchUrl;
   // Returns whether gesture is handled
-  final bool Function(TapDownDetails details, TextPosition Function(Offset offset))? onTapDown;
+  final bool Function(
+      TapDownDetails details, TextPosition Function(Offset offset))? onTapDown;
 
   // Returns whether gesture is handled
-  final bool Function(TapUpDetails details, TextPosition Function(Offset offset))? onTapUp;
+  final bool Function(
+      TapUpDetails details, TextPosition Function(Offset offset))? onTapUp;
 
   // Returns whether gesture is handled
-  final bool Function(LongPressStartDetails details, TextPosition Function(Offset offset))? onSingleLongTapStart;
+  final bool Function(
+          LongPressStartDetails details, TextPosition Function(Offset offset))?
+      onSingleLongTapStart;
 
   // Returns whether gesture is handled
-  final bool Function(LongPressMoveUpdateDetails details, TextPosition Function(Offset offset))?
-      onSingleLongTapMoveUpdate;
+  final bool Function(LongPressMoveUpdateDetails details,
+      TextPosition Function(Offset offset))? onSingleLongTapMoveUpdate;
   // Returns whether gesture is handled
-  final bool Function(LongPressEndDetails details, TextPosition Function(Offset offset))? onSingleLongTapEnd;
+  final bool Function(
+          LongPressEndDetails details, TextPosition Function(Offset offset))?
+      onSingleLongTapEnd;
 
   final EmbedBuilder embedBuilder;
+  final CustomStyleBuilder? customStyleBuilder;
 
   @override
   _QuillEditorState createState() => _QuillEditorState();
 }
 
-class _QuillEditorState extends State<QuillEditor> implements EditorTextSelectionGestureDetectorBuilderDelegate {
+class _QuillEditorState extends State<QuillEditor>
+    implements EditorTextSelectionGestureDetectorBuilderDelegate {
   final GlobalKey<EditorState> _editorKey = GlobalKey<EditorState>();
-  late EditorTextSelectionGestureDetectorBuilder _selectionGestureDetectorBuilder;
+  late EditorTextSelectionGestureDetectorBuilder
+      _selectionGestureDetectorBuilder;
 
   @override
   void initState() {
     super.initState();
-    _selectionGestureDetectorBuilder = _QuillEditorSelectionGestureDetectorBuilder(this);
+    _selectionGestureDetectorBuilder =
+        _QuillEditorSelectionGestureDetectorBuilder(this);
   }
 
   @override
   Widget build(BuildContext context) {
-    final cupertinoTheme = CupertinoTheme.of(context);
+    final theme = Theme.of(context);
+    final selectionTheme = TextSelectionTheme.of(context);
 
     TextSelectionControls textSelectionControls;
     bool paintCursorAboveText;
@@ -220,66 +343,82 @@ class _QuillEditorState extends State<QuillEditor> implements EditorTextSelectio
     Color? cursorColor;
     Color selectionColor;
     Radius? cursorRadius;
-    if (Platform.isIOS || Platform.isMacOS) {
-      textSelectionControls = cupertinoTextSelectionControls;
-      paintCursorAboveText = true;
-      cursorOpacityAnimates = true;
-      cursorColor ??= cupertinoTheme.primaryColor;
-      selectionColor = cupertinoTheme.primaryColor.withOpacity(0.40);
-      cursorRadius ??= const Radius.circular(2);
-      cursorOffset = Offset(iOSHorizontalOffset / MediaQuery.of(context).devicePixelRatio, 0);
-    } else if (Platform.isAndroid || Platform.isFuchsia || Platform.isWindows || Platform.isLinux) {
-      textSelectionControls = materialTextSelectionControls;
-      paintCursorAboveText = false;
-      cursorOpacityAnimates = false;
-      cursorColor ??= cupertinoTheme.primaryColor;
-      selectionColor = cupertinoTheme.primaryColor.withOpacity(0.40);
-    } else {
-      throw UnimplementedError();
+
+    switch (theme.platform) {
+      case TargetPlatform.android:
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+        textSelectionControls = materialTextSelectionControls;
+        paintCursorAboveText = false;
+        cursorOpacityAnimates = false;
+        cursorColor ??= selectionTheme.cursorColor ?? theme.colorScheme.primary;
+        selectionColor = selectionTheme.selectionColor ??
+            theme.colorScheme.primary.withOpacity(0.40);
+        break;
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        final cupertinoTheme = CupertinoTheme.of(context);
+        textSelectionControls = cupertinoTextSelectionControls;
+        paintCursorAboveText = true;
+        cursorOpacityAnimates = true;
+        cursorColor ??=
+            selectionTheme.cursorColor ?? cupertinoTheme.primaryColor;
+        selectionColor = selectionTheme.selectionColor ??
+            cupertinoTheme.primaryColor.withOpacity(0.40);
+        cursorRadius ??= const Radius.circular(2);
+        cursorOffset = Offset(
+            iOSHorizontalOffset / MediaQuery.of(context).devicePixelRatio, 0);
+        break;
+      default:
+        throw UnimplementedError();
     }
 
     return _selectionGestureDetectorBuilder.build(
       HitTestBehavior.translucent,
       RawEditor(
-          _editorKey,
-          widget.controller,
-          widget.focusNode,
-          widget.scrollController,
-          widget.scrollable,
-          widget.scrollBottomInset,
-          widget.padding,
-          widget.readOnly,
-          widget.placeholder,
-          widget.onLaunchUrl,
-          ToolbarOptions(
-            copy: widget.enableInteractiveSelection,
-            cut: widget.enableInteractiveSelection,
-            paste: widget.enableInteractiveSelection,
-            selectAll: widget.enableInteractiveSelection,
-          ),
-          Platform.isIOS || Platform.isAndroid,
-          widget.showCursor,
-          CursorStyle(
-            color: cursorColor,
-            backgroundColor: Colors.grey,
-            width: 2,
-            radius: cursorRadius,
-            offset: cursorOffset,
-            paintAboveText: widget.paintCursorAboveText ?? paintCursorAboveText,
-            opacityAnimates: cursorOpacityAnimates,
-          ),
-          widget.textCapitalization,
-          widget.maxHeight,
-          widget.minHeight,
-          widget.customStyles,
-          widget.expands,
-          widget.autoFocus,
-          selectionColor,
-          textSelectionControls,
-          widget.keyboardAppearance,
-          widget.enableInteractiveSelection,
-          widget.scrollPhysics,
-          widget.embedBuilder),
+        _editorKey,
+        widget.controller,
+        widget.focusNode,
+        widget.scrollController,
+        widget.scrollable,
+        widget.scrollBottomInset,
+        widget.padding,
+        widget.readOnly,
+        widget.placeholder,
+        widget.onLaunchUrl,
+        ToolbarOptions(
+          copy: widget.enableInteractiveSelection,
+          cut: widget.enableInteractiveSelection,
+          paste: widget.enableInteractiveSelection,
+          selectAll: widget.enableInteractiveSelection,
+        ),
+        theme.platform == TargetPlatform.iOS ||
+            theme.platform == TargetPlatform.android,
+        widget.showCursor,
+        CursorStyle(
+          color: cursorColor,
+          backgroundColor: Colors.grey,
+          width: 2,
+          radius: cursorRadius,
+          offset: cursorOffset,
+          paintAboveText: widget.paintCursorAboveText ?? paintCursorAboveText,
+          opacityAnimates: cursorOpacityAnimates,
+        ),
+        widget.textCapitalization,
+        widget.maxHeight,
+        widget.minHeight,
+        widget.customStyles,
+        widget.expands,
+        widget.autoFocus,
+        selectionColor,
+        textSelectionControls,
+        widget.keyboardAppearance,
+        widget.enableInteractiveSelection,
+        widget.scrollPhysics,
+        widget.embedBuilder,
+        widget.customStyleBuilder,
+      ),
     );
   }
 
@@ -303,7 +442,8 @@ class _QuillEditorState extends State<QuillEditor> implements EditorTextSelectio
   }
 }
 
-class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGestureDetectorBuilder {
+class _QuillEditorSelectionGestureDetectorBuilder
+    extends EditorTextSelectionGestureDetectorBuilder {
   _QuillEditorSelectionGestureDetectorBuilder(this._state) : super(_state);
 
   final _QuillEditorState _state;
@@ -324,7 +464,8 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
     if (_state.widget.onSingleLongTapMoveUpdate != null) {
       final renderEditor = getRenderEditor();
       if (renderEditor != null) {
-        if (_state.widget.onSingleLongTapMoveUpdate!(details, renderEditor.getPositionForOffset)) {
+        if (_state.widget.onSingleLongTapMoveUpdate!(
+            details, renderEditor.getPositionForOffset)) {
           return;
         }
       }
@@ -332,21 +473,27 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
     if (!delegate.getSelectionEnabled()) {
       return;
     }
-
-    if (Platform.isIOS || Platform.isMacOS) {
-      getRenderEditor()!.selectPositionAt(
-        details.globalPosition,
-        null,
-        SelectionChangedCause.longPress,
-      );
-    } else if (Platform.isAndroid || Platform.isFuchsia || Platform.isWindows || Platform.isLinux) {
-      getRenderEditor()!.selectWordsInRange(
-        details.globalPosition - details.offsetFromOrigin,
-        details.globalPosition,
-        SelectionChangedCause.longPress,
-      );
-    } else {
-      throw 'Invalid platform';
+    switch (Theme.of(_state.context).platform) {
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        getRenderEditor()!.selectPositionAt(
+          details.globalPosition,
+          null,
+          SelectionChangedCause.longPress,
+        );
+        break;
+      case TargetPlatform.android:
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+        getRenderEditor()!.selectWordsInRange(
+          details.globalPosition - details.offsetFromOrigin,
+          details.globalPosition,
+          SelectionChangedCause.longPress,
+        );
+        break;
+      default:
+        throw 'Invalid platform';
     }
   }
 
@@ -355,7 +502,8 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
       return false;
     }
     final pos = getRenderEditor()!.getPositionForOffset(details.globalPosition);
-    final result = getEditor()!.widget.controller.document.queryChild(pos.offset);
+    final result =
+        getEditor()!.widget.controller.document.queryChild(pos.offset);
     if (result.node == null) {
       return false;
     }
@@ -363,7 +511,8 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
     final segmentResult = line.queryChild(result.offset, false);
     if (segmentResult.node == null) {
       if (line.length == 1) {
-        getEditor()!.widget.controller.updateSelection(TextSelection.collapsed(offset: pos.offset), ChangeSource.LOCAL);
+        getEditor()!.widget.controller.updateSelection(
+            TextSelection.collapsed(offset: pos.offset), ChangeSource.LOCAL);
         return true;
       }
       return false;
@@ -375,7 +524,8 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
       String? link = segment.style.attributes[Attribute.link.key]!.value;
       if (getEditor()!.widget.readOnly && link != null) {
         link = link.trim();
-        if (!linkPrefixes.any((linkPrefix) => link!.toLowerCase().startsWith(linkPrefix))) {
+        if (!linkPrefixes
+            .any((linkPrefix) => link!.toLowerCase().startsWith(linkPrefix))) {
           link = 'https://$link';
         }
         launchUrl(link);
@@ -393,7 +543,8 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
               imageProvider: imageUrl.startsWith('http')
                   ? NetworkImage(imageUrl)
                   : isBase64(imageUrl)
-                      ? Image.memory(base64.decode(imageUrl)) as ImageProvider<Object>?
+                      ? Image.memory(base64.decode(imageUrl))
+                          as ImageProvider<Object>?
                       : FileImage(io.File(imageUrl)),
             ),
           ),
@@ -413,7 +564,8 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
     if (_state.widget.onTapDown != null) {
       final renderEditor = getRenderEditor();
       if (renderEditor != null) {
-        if (_state.widget.onTapDown!(details, renderEditor.getPositionForOffset)) {
+        if (_state.widget.onTapDown!(
+            details, renderEditor.getPositionForOffset)) {
           return;
         }
       }
@@ -426,7 +578,8 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
     if (_state.widget.onTapUp != null) {
       final renderEditor = getRenderEditor();
       if (renderEditor != null) {
-        if (_state.widget.onTapUp!(details, renderEditor.getPositionForOffset)) {
+        if (_state.widget.onTapUp!(
+            details, renderEditor.getPositionForOffset)) {
           return;
         }
       }
@@ -437,21 +590,28 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
     final positionSelected = _onTapping(details);
 
     if (delegate.getSelectionEnabled() && !positionSelected) {
-      if (Platform.isIOS || Platform.isMacOS) {
-        switch (details.kind) {
-          case PointerDeviceKind.mouse:
-          case PointerDeviceKind.stylus:
-          case PointerDeviceKind.invertedStylus:
-            getRenderEditor()!.selectPosition(SelectionChangedCause.tap);
-            break;
-          case PointerDeviceKind.touch:
-          case PointerDeviceKind.unknown:
-            getRenderEditor()!.selectWordEdge(SelectionChangedCause.tap);
-            break;
-        }
+      switch (Theme.of(_state.context).platform) {
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          switch (details.kind) {
+            case PointerDeviceKind.mouse:
+            case PointerDeviceKind.stylus:
+            case PointerDeviceKind.invertedStylus:
+              getRenderEditor()!.selectPosition(SelectionChangedCause.tap);
+              break;
+            case PointerDeviceKind.touch:
+            case PointerDeviceKind.unknown:
+              getRenderEditor()!.selectWordEdge(SelectionChangedCause.tap);
+              break;
+          }
+          break;
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          getRenderEditor()!.selectPosition(SelectionChangedCause.tap);
+          break;
       }
-    } else if (Platform.isAndroid || Platform.isFuchsia || Platform.isWindows || Platform.isLinux) {
-      getRenderEditor()!.selectPosition(SelectionChangedCause.tap);
     }
     _state._requestKeyboard();
   }
@@ -461,25 +621,33 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
     if (_state.widget.onSingleLongTapStart != null) {
       final renderEditor = getRenderEditor();
       if (renderEditor != null) {
-        if (_state.widget.onSingleLongTapStart!(details, renderEditor.getPositionForOffset)) {
+        if (_state.widget.onSingleLongTapStart!(
+            details, renderEditor.getPositionForOffset)) {
           return;
         }
       }
     }
 
     if (delegate.getSelectionEnabled()) {
-      if (Platform.isIOS || Platform.isMacOS) {
-        getRenderEditor()!.selectPositionAt(
-          details.globalPosition,
-          null,
-          SelectionChangedCause.longPress,
-        );
+      switch (Theme.of(_state.context).platform) {
+        case TargetPlatform.iOS:
+        case TargetPlatform.macOS:
+          getRenderEditor()!.selectPositionAt(
+            details.globalPosition,
+            null,
+            SelectionChangedCause.longPress,
+          );
+          break;
+        case TargetPlatform.android:
+        case TargetPlatform.fuchsia:
+        case TargetPlatform.linux:
+        case TargetPlatform.windows:
+          getRenderEditor()!.selectWord(SelectionChangedCause.longPress);
+          Feedback.forLongPress(_state.context);
+          break;
+        default:
+          throw 'Invalid platform';
       }
-    } else if (Platform.isAndroid || Platform.isFuchsia || Platform.isWindows || Platform.isLinux) {
-      getRenderEditor()!.selectWord(SelectionChangedCause.longPress);
-      Feedback.forLongPress(_state.context);
-    } else {
-      throw 'Invalid platform';
     }
   }
 
@@ -488,7 +656,8 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
     if (_state.widget.onSingleLongTapEnd != null) {
       final renderEditor = getRenderEditor();
       if (renderEditor != null) {
-        if (_state.widget.onSingleLongTapEnd!(details, renderEditor.getPositionForOffset)) {
+        if (_state.widget.onSingleLongTapEnd!(
+            details, renderEditor.getPositionForOffset)) {
           return;
         }
       }
@@ -497,9 +666,11 @@ class _QuillEditorSelectionGestureDetectorBuilder extends EditorTextSelectionGes
   }
 }
 
-typedef TextSelectionChangedHandler = void Function(TextSelection selection, SelectionChangedCause cause);
+typedef TextSelectionChangedHandler = void Function(
+    TextSelection selection, SelectionChangedCause cause);
 
-class RenderEditor extends RenderEditableContainerBox implements RenderAbstractEditor {
+class RenderEditor extends RenderEditableContainerBox
+    implements RenderAbstractEditor {
   RenderEditor(
     List<RenderEditableBox>? children,
     TextDirection textDirection,
@@ -526,9 +697,11 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
   LayerLink _startHandleLayerLink;
   LayerLink _endHandleLayerLink;
   TextSelectionChangedHandler onSelectionChanged;
-  final ValueNotifier<bool> _selectionStartInViewport = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _selectionStartInViewport =
+      ValueNotifier<bool>(true);
 
-  ValueListenable<bool> get selectionStartInViewport => _selectionStartInViewport;
+  ValueListenable<bool> get selectionStartInViewport =>
+      _selectionStartInViewport;
 
   ValueListenable<bool> get selectionEndInViewport => _selectionEndInViewport;
   final ValueNotifier<bool> _selectionEndInViewport = ValueNotifier<bool>(true);
@@ -582,14 +755,20 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
   }
 
   @override
-  List<TextSelectionPoint> getEndpointsForSelection(TextSelection textSelection) {
+  List<TextSelectionPoint> getEndpointsForSelection(
+      TextSelection textSelection) {
     if (textSelection.isCollapsed) {
       final child = childAtPosition(textSelection.extent);
-      final localPosition = TextPosition(offset: textSelection.extentOffset - child.getContainer().offset);
+      final localPosition = TextPosition(
+          offset: textSelection.extentOffset - child.getContainer().offset);
       final localOffset = child.getOffsetForCaret(localPosition);
       final parentData = child.parentData as BoxParentData;
       return <TextSelectionPoint>[
-        TextSelectionPoint(Offset(0, child.preferredLineHeight(localPosition)) + localOffset + parentData.offset, null)
+        TextSelectionPoint(
+            Offset(0, child.preferredLineHeight(localPosition)) +
+                localOffset +
+                parentData.offset,
+            null)
       ];
     }
 
@@ -605,9 +784,11 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
     assert(baseChild != null);
 
     final baseParentData = baseChild!.parentData as BoxParentData;
-    final baseSelection = localSelection(baseChild.getContainer(), textSelection, true);
+    final baseSelection =
+        localSelection(baseChild.getContainer(), textSelection, true);
     var basePoint = baseChild.getBaseEndpointForSelection(baseSelection);
-    basePoint = TextSelectionPoint(basePoint.point + baseParentData.offset, basePoint.direction);
+    basePoint = TextSelectionPoint(
+        basePoint.point + baseParentData.offset, basePoint.direction);
 
     final extentNode = _container.queryChild(textSelection.end, false).node;
     RenderEditableBox? extentChild = baseChild;
@@ -620,9 +801,12 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
     assert(extentChild != null);
 
     final extentParentData = extentChild!.parentData as BoxParentData;
-    final extentSelection = localSelection(extentChild.getContainer(), textSelection, true);
-    var extentPoint = extentChild.getExtentEndpointForSelection(extentSelection);
-    extentPoint = TextSelectionPoint(extentPoint.point + extentParentData.offset, extentPoint.direction);
+    final extentSelection =
+        localSelection(extentChild.getContainer(), textSelection, true);
+    var extentPoint =
+        extentChild.getExtentEndpointForSelection(extentSelection);
+    extentPoint = TextSelectionPoint(
+        extentPoint.point + extentParentData.offset, extentPoint.direction);
 
     return <TextSelectionPoint>[basePoint, extentPoint];
   }
@@ -642,7 +826,8 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
   ) {
     final firstPosition = getPositionForOffset(from);
     final firstWord = selectWordAtPosition(firstPosition);
-    final lastWord = to == null ? firstWord : selectWordAtPosition(getPositionForOffset(to));
+    final lastWord =
+        to == null ? firstWord : selectWordAtPosition(getPositionForOffset(to));
 
     _handleSelectionChange(
       TextSelection(
@@ -658,8 +843,12 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
     TextSelection nextSelection,
     SelectionChangedCause cause,
   ) {
-    final focusingEmpty = nextSelection.baseOffset == 0 && nextSelection.extentOffset == 0 && !_hasFocus;
-    if (nextSelection == selection && cause != SelectionChangedCause.keyboard && !focusingEmpty) {
+    final focusingEmpty = nextSelection.baseOffset == 0 &&
+        nextSelection.extentOffset == 0 &&
+        !_hasFocus;
+    if (nextSelection == selection &&
+        cause != SelectionChangedCause.keyboard &&
+        !focusingEmpty) {
       return;
     }
     onSelectionChanged(nextSelection, cause);
@@ -687,7 +876,8 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
       );
     } else {
       _handleSelectionChange(
-        TextSelection.collapsed(offset: word.end, affinity: TextAffinity.upstream),
+        TextSelection.collapsed(
+            offset: word.end, affinity: TextAffinity.upstream),
         cause,
       );
     }
@@ -731,7 +921,8 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
   TextSelection selectWordAtPosition(TextPosition position) {
     final child = childAtPosition(position);
     final nodeOffset = child.getContainer().offset;
-    final localPosition = TextPosition(offset: position.offset - nodeOffset, affinity: position.affinity);
+    final localPosition = TextPosition(
+        offset: position.offset - nodeOffset, affinity: position.affinity);
     final localWord = child.getWordBoundary(localPosition);
     final word = TextRange(
       start: localWord.start + nodeOffset,
@@ -747,7 +938,8 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
   TextSelection selectLineAtPosition(TextPosition position) {
     final child = childAtPosition(position);
     final nodeOffset = child.getContainer().offset;
-    final localPosition = TextPosition(offset: position.offset - nodeOffset, affinity: position.affinity);
+    final localPosition = TextPosition(
+        offset: position.offset - nodeOffset, affinity: position.affinity);
     final localLineRange = child.getLineBoundary(localPosition);
     final line = TextRange(
       start: localLineRange.start + nodeOffset,
@@ -771,7 +963,8 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
     return defaultHitTestChildren(result, position: position);
   }
 
-  void _paintHandleLayers(PaintingContext context, List<TextSelectionPoint> endpoints) {
+  void _paintHandleLayers(
+      PaintingContext context, List<TextSelectionPoint> endpoints) {
     var startPoint = endpoints[0].point;
     startPoint = Offset(
       startPoint.dx.clamp(0.0, size.width),
@@ -799,7 +992,8 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
   @override
   double preferredLineHeight(TextPosition position) {
     final child = childAtPosition(position);
-    return child.preferredLineHeight(TextPosition(offset: position.offset - child.getContainer().offset));
+    return child.preferredLineHeight(
+        TextPosition(offset: position.offset - child.getContainer().offset));
   }
 
   @override
@@ -821,18 +1015,36 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
   /// The offset is the distance from the top of the editor and is the minimum
   /// from the current scroll position until [selection] becomes visible.
   /// Returns null if [selection] is already visible.
-  double? getOffsetToRevealCursor(double viewportHeight, double scrollOffset, double offsetInViewport) {
+  double? getOffsetToRevealCursor(
+      double viewportHeight, double scrollOffset, double offsetInViewport) {
     final endpoints = getEndpointsForSelection(selection);
-    final endpoint = endpoints.first;
+
+    // when we drag the right handle, we should get the last point
+    TextSelectionPoint endpoint;
+    if (selection.isCollapsed) {
+      endpoint = endpoints.first;
+    } else {
+      if (selection is DragTextSelection) {
+        endpoint = (selection as DragTextSelection).first
+            ? endpoints.first
+            : endpoints.last;
+      } else {
+        endpoint = endpoints.first;
+      }
+    }
+
     final child = childAtPosition(selection.extent);
     const kMargin = 8.0;
 
     final caretTop = endpoint.point.dy -
-        child.preferredLineHeight(TextPosition(offset: selection.extentOffset - child.getContainer().offset)) -
+        child.preferredLineHeight(TextPosition(
+            offset:
+                selection.extentOffset - child.getContainer().documentOffset)) -
         kMargin +
         offsetInViewport +
         scrollBottomInset;
-    final caretBottom = endpoint.point.dy + kMargin + offsetInViewport + scrollBottomInset;
+    final caretBottom =
+        endpoint.point.dy + kMargin + offsetInViewport + scrollBottomInset;
     double? dy;
     if (caretTop < scrollOffset) {
       dy = caretTop;
@@ -844,14 +1056,28 @@ class RenderEditor extends RenderEditableContainerBox implements RenderAbstractE
     }
     return math.max(dy, 0);
   }
+
+  @override
+  Rect getLocalRectForCaret(TextPosition position) {
+    final targetChild = childAtPosition(position);
+    final localPosition = targetChild.globalToLocalPosition(position);
+
+    final childLocalRect = targetChild.getLocalRectForCaret(localPosition);
+
+    final boxParentData = targetChild.parentData as BoxParentData;
+    return childLocalRect.shift(Offset(0, boxParentData.offset.dy));
+  }
 }
 
-class EditableContainerParentData extends ContainerBoxParentData<RenderEditableBox> {}
+class EditableContainerParentData
+    extends ContainerBoxParentData<RenderEditableBox> {}
 
 class RenderEditableContainerBox extends RenderBox
     with
-        ContainerRenderObjectMixin<RenderEditableBox, EditableContainerParentData>,
-        RenderBoxContainerDefaultsMixin<RenderEditableBox, EditableContainerParentData> {
+        ContainerRenderObjectMixin<RenderEditableBox,
+            EditableContainerParentData>,
+        RenderBoxContainerDefaultsMixin<RenderEditableBox,
+            EditableContainerParentData> {
   RenderEditableContainerBox(
     List<RenderEditableBox>? children,
     this._container,
@@ -967,7 +1193,9 @@ class RenderEditableContainerBox extends RenderBox
 
     var mainAxisExtent = _resolvedPadding!.top;
     var child = firstChild;
-    final innerConstraints = BoxConstraints.tightFor(width: constraints.maxWidth).deflate(_resolvedPadding!);
+    final innerConstraints =
+        BoxConstraints.tightFor(width: constraints.maxWidth)
+            .deflate(_resolvedPadding!);
     while (child != null) {
       child.layout(innerConstraints, parentUsesSize: true);
       final childParentData = (child.parentData as EditableContainerParentData)
@@ -1008,8 +1236,11 @@ class RenderEditableContainerBox extends RenderBox
   double computeMinIntrinsicWidth(double height) {
     _resolvePadding();
     return _getIntrinsicCrossAxis((child) {
-      final childHeight = math.max<double>(0, height - _resolvedPadding!.top + _resolvedPadding!.bottom);
-      return child.getMinIntrinsicWidth(childHeight) + _resolvedPadding!.left + _resolvedPadding!.right;
+      final childHeight = math.max<double>(
+          0, height - _resolvedPadding!.top + _resolvedPadding!.bottom);
+      return child.getMinIntrinsicWidth(childHeight) +
+          _resolvedPadding!.left +
+          _resolvedPadding!.right;
     });
   }
 
@@ -1017,8 +1248,11 @@ class RenderEditableContainerBox extends RenderBox
   double computeMaxIntrinsicWidth(double height) {
     _resolvePadding();
     return _getIntrinsicCrossAxis((child) {
-      final childHeight = math.max<double>(0, height - _resolvedPadding!.top + _resolvedPadding!.bottom);
-      return child.getMaxIntrinsicWidth(childHeight) + _resolvedPadding!.left + _resolvedPadding!.right;
+      final childHeight = math.max<double>(
+          0, height - _resolvedPadding!.top + _resolvedPadding!.bottom);
+      return child.getMaxIntrinsicWidth(childHeight) +
+          _resolvedPadding!.left +
+          _resolvedPadding!.right;
     });
   }
 
@@ -1026,8 +1260,11 @@ class RenderEditableContainerBox extends RenderBox
   double computeMinIntrinsicHeight(double width) {
     _resolvePadding();
     return _getIntrinsicMainAxis((child) {
-      final childWidth = math.max<double>(0, width - _resolvedPadding!.left + _resolvedPadding!.right);
-      return child.getMinIntrinsicHeight(childWidth) + _resolvedPadding!.top + _resolvedPadding!.bottom;
+      final childWidth = math.max<double>(
+          0, width - _resolvedPadding!.left + _resolvedPadding!.right);
+      return child.getMinIntrinsicHeight(childWidth) +
+          _resolvedPadding!.top +
+          _resolvedPadding!.bottom;
     });
   }
 
@@ -1035,14 +1272,18 @@ class RenderEditableContainerBox extends RenderBox
   double computeMaxIntrinsicHeight(double width) {
     _resolvePadding();
     return _getIntrinsicMainAxis((child) {
-      final childWidth = math.max<double>(0, width - _resolvedPadding!.left + _resolvedPadding!.right);
-      return child.getMaxIntrinsicHeight(childWidth) + _resolvedPadding!.top + _resolvedPadding!.bottom;
+      final childWidth = math.max<double>(
+          0, width - _resolvedPadding!.left + _resolvedPadding!.right);
+      return child.getMaxIntrinsicHeight(childWidth) +
+          _resolvedPadding!.top +
+          _resolvedPadding!.bottom;
     });
   }
 
   @override
   double computeDistanceToActualBaseline(TextBaseline baseline) {
     _resolvePadding();
-    return defaultComputeDistanceToFirstActualBaseline(baseline)! + _resolvedPadding!.top;
+    return defaultComputeDistanceToFirstActualBaseline(baseline)! +
+        _resolvedPadding!.top;
   }
 }

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -56,9 +57,11 @@ class RawEditor extends StatefulWidget {
     this.enableInteractiveSelection,
     this.scrollPhysics,
     this.embedBuilder,
+    this.customStyleBuilder,
   )   : assert(maxHeight == null || maxHeight > 0, 'maxHeight cannot be null'),
         assert(minHeight == null || minHeight >= 0, 'minHeight cannot be null'),
-        assert(maxHeight == null || minHeight == null || maxHeight >= minHeight, 'maxHeight cannot be null'),
+        assert(maxHeight == null || minHeight == null || maxHeight >= minHeight,
+            'maxHeight cannot be null'),
         showCursor = showCursor ?? true,
         super(key: key);
 
@@ -87,7 +90,7 @@ class RawEditor extends StatefulWidget {
   final bool enableInteractiveSelection;
   final ScrollPhysics? scrollPhysics;
   final EmbedBuilder embedBuilder;
-
+  final CustomStyleBuilder? customStyleBuilder;
   @override
   State<StatefulWidget> createState() => RawEditorState();
 }
@@ -113,7 +116,9 @@ class RawEditorState extends EditorState
   EditorTextSelectionOverlay? getSelectionOverlay() => _selectionOverlay;
   EditorTextSelectionOverlay? _selectionOverlay;
 
-  ScrollController? _scrollController;
+  @override
+  ScrollController get scrollController => _scrollController;
+  late ScrollController _scrollController;
 
   late CursorCont _cursorCont;
 
@@ -138,8 +143,9 @@ class RawEditorState extends EditorState
     super.build(context);
 
     var _doc = widget.controller.document;
-    if (_doc.isEmpty() && !widget.focusNode.hasFocus && widget.placeholder != null) {
-      _doc = Document.fromJson(jsonDecode('[{"attributes":{"placeholder":true},"insert":"${widget.placeholder}\\n"}]'));
+    if (_doc.isEmpty() && widget.placeholder != null) {
+      _doc = Document.fromJson(jsonDecode(
+          '[{"attributes":{"placeholder":true},"insert":"${widget.placeholder}\\n"}]'));
     }
 
     Widget child = CompositedTransformTarget(
@@ -162,7 +168,8 @@ class RawEditorState extends EditorState
     );
 
     if (widget.scrollable) {
-      final baselinePadding = EdgeInsets.only(top: _styles!.paragraph!.verticalSpacing.item1);
+      final baselinePadding =
+          EdgeInsets.only(top: _styles!.paragraph!.verticalSpacing.item1);
       child = BaselineProxy(
         textStyle: _styles!.paragraph!.style,
         padding: baselinePadding,
@@ -176,7 +183,9 @@ class RawEditorState extends EditorState
 
     final constraints = widget.expands
         ? const BoxConstraints.expand()
-        : BoxConstraints(minHeight: widget.minHeight ?? 0.0, maxHeight: widget.maxHeight ?? double.infinity);
+        : BoxConstraints(
+            minHeight: widget.minHeight ?? 0.0,
+            maxHeight: widget.maxHeight ?? double.infinity);
 
     return QuillStyles(
       data: _styles!,
@@ -190,7 +199,8 @@ class RawEditorState extends EditorState
     );
   }
 
-  void _handleSelectionChanged(TextSelection selection, SelectionChangedCause cause) {
+  void _handleSelectionChanged(
+      TextSelection selection, SelectionChangedCause cause) {
     widget.controller.updateSelection(selection, ChangeSource.LOCAL);
 
     _selectionOverlay?.handlesVisible = _shouldShowSelectionHandles();
@@ -222,21 +232,24 @@ class RawEditorState extends EditorState
       } else if (node is Block) {
         final attrs = node.style.attributes;
         final editableTextBlock = EditableTextBlock(
-          node,
-          _textDirection,
-          widget.scrollBottomInset,
-          _getVerticalSpacingForBlock(node, _styles),
-          widget.controller.selection,
-          widget.selectionColor,
-          _styles,
-          widget.enableInteractiveSelection,
-          _hasFocus,
-          attrs.containsKey(Attribute.codeBlock.key) ? const EdgeInsets.all(16) : null,
-          widget.embedBuilder,
-          _cursorCont,
-          indentLevelCounts,
-          _handleCheckboxTap,
-        );
+            block: node,
+            textDirection: _textDirection,
+            scrollBottomInset: widget.scrollBottomInset,
+            verticalSpacing: _getVerticalSpacingForBlock(node, _styles),
+            textSelection: widget.controller.selection,
+            color: widget.selectionColor,
+            styles: _styles,
+            enableInteractiveSelection: widget.enableInteractiveSelection,
+            hasFocus: _hasFocus,
+            contentPadding: attrs.containsKey(Attribute.codeBlock.key)
+                ? const EdgeInsets.all(16)
+                : null,
+            embedBuilder: widget.embedBuilder,
+            cursorCont: _cursorCont,
+            indentLevelCounts: indentLevelCounts,
+            onCheckboxTap: _handleCheckboxTap,
+            readOnly: widget.readOnly,
+            customStyleBuilder: widget.customStyleBuilder);
         result.add(editableTextBlock);
       } else {
         throw StateError('Unreachable.');
@@ -245,12 +258,15 @@ class RawEditorState extends EditorState
     return result;
   }
 
-  EditableTextLine _getEditableTextLineFromNode(Line node, BuildContext context) {
+  EditableTextLine _getEditableTextLineFromNode(
+      Line node, BuildContext context) {
     final textLine = TextLine(
       line: node,
       textDirection: _textDirection,
       embedBuilder: widget.embedBuilder,
+      customStyleBuilder: widget.customStyleBuilder,
       styles: _styles!,
+      readOnly: widget.readOnly,
     );
     final editableTextLine = EditableTextLine(
         node,
@@ -268,7 +284,8 @@ class RawEditorState extends EditorState
     return editableTextLine;
   }
 
-  Tuple2<double, double> _getVerticalSpacingForLine(Line line, DefaultStyles? defaultStyles) {
+  Tuple2<double, double> _getVerticalSpacingForLine(
+      Line line, DefaultStyles? defaultStyles) {
     final attrs = line.style.attributes;
     if (attrs.containsKey(Attribute.header.key)) {
       final int? level = attrs[Attribute.header.key]!.value;
@@ -287,7 +304,8 @@ class RawEditorState extends EditorState
     return defaultStyles!.paragraph!.verticalSpacing;
   }
 
-  Tuple2<double, double> _getVerticalSpacingForBlock(Block node, DefaultStyles? defaultStyles) {
+  Tuple2<double, double> _getVerticalSpacingForBlock(
+      Block node, DefaultStyles? defaultStyles) {
     final attrs = node.style.attributes;
     if (attrs.containsKey(Attribute.blockQuote.key)) {
       return defaultStyles!.quote!.verticalSpacing;
@@ -310,7 +328,7 @@ class RawEditorState extends EditorState
     });
 
     _scrollController = widget.scrollController;
-    _scrollController!.addListener(_updateSelectionOverlayForScroll);
+    _scrollController.addListener(_updateSelectionOverlayForScroll);
 
     _cursorCont = CursorCont(
       show: ValueNotifier<bool>(widget.showCursor),
@@ -332,7 +350,8 @@ class RawEditorState extends EditorState
     } else {
       _keyboardVisibilityController = KeyboardVisibilityController();
       _keyboardVisible = _keyboardVisibilityController!.isVisible;
-      _keyboardVisibilitySubscription = _keyboardVisibilityController?.onChange.listen((visible) {
+      _keyboardVisibilitySubscription =
+          _keyboardVisibilityController?.onChange.listen((visible) {
         _keyboardVisible = visible;
         if (visible) {
           _onChangeTextEditingValue();
@@ -340,8 +359,8 @@ class RawEditorState extends EditorState
       });
     }
 
-    _focusAttachment =
-        widget.focusNode.attach(context, onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
+    _focusAttachment = widget.focusNode.attach(context,
+        onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
     widget.focusNode.addListener(_handleFocusChanged);
   }
 
@@ -350,7 +369,9 @@ class RawEditorState extends EditorState
     super.didChangeDependencies();
     final parentStyles = QuillStyles.getStyles(context, true);
     final defaultStyles = DefaultStyles.getInstance(context);
-    _styles = (parentStyles != null) ? defaultStyles.merge(parentStyles) : defaultStyles;
+    _styles = (parentStyles != null)
+        ? defaultStyles.merge(parentStyles)
+        : defaultStyles;
 
     if (widget.customStyles != null) {
       _styles = _styles!.merge(widget.customStyles!);
@@ -376,16 +397,16 @@ class RawEditorState extends EditorState
     }
 
     if (widget.scrollController != _scrollController) {
-      _scrollController!.removeListener(_updateSelectionOverlayForScroll);
+      _scrollController.removeListener(_updateSelectionOverlayForScroll);
       _scrollController = widget.scrollController;
-      _scrollController!.addListener(_updateSelectionOverlayForScroll);
+      _scrollController.addListener(_updateSelectionOverlayForScroll);
     }
 
     if (widget.focusNode != oldWidget.focusNode) {
       oldWidget.focusNode.removeListener(_handleFocusChanged);
       _focusAttachment?.detach();
-      _focusAttachment =
-          widget.focusNode.attach(context, onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
+      _focusAttachment = widget.focusNode.attach(context,
+          onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
       widget.focusNode.addListener(_handleFocusChanged);
       updateKeepAlive();
     }
@@ -405,7 +426,8 @@ class RawEditorState extends EditorState
   }
 
   bool _shouldShowSelectionHandles() {
-    return widget.showSelectionHandles && !widget.controller.selection.isCollapsed;
+    return widget.showSelectionHandles &&
+        !widget.controller.selection.isCollapsed;
   }
 
   @override
@@ -457,7 +479,8 @@ class RawEditorState extends EditorState
       return;
     }
     _showCaretOnScreen();
-    _cursorCont.startOrStopCursorTimerIfNeeded(_hasFocus, widget.controller.selection);
+    _cursorCont.startOrStopCursorTimerIfNeeded(
+        _hasFocus, widget.controller.selection);
     if (hasConnection) {
       _cursorCont
         ..stopCursorTimer(resetCharTicks: false)
@@ -512,7 +535,8 @@ class RawEditorState extends EditorState
 
   void _handleFocusChanged() {
     openOrCloseConnection();
-    _cursorCont.startOrStopCursorTimerIfNeeded(_hasFocus, widget.controller.selection);
+    _cursorCont.startOrStopCursorTimerIfNeeded(
+        _hasFocus, widget.controller.selection);
     _updateOrDisposeSelectionOverlayIfNeeded();
     if (_hasFocus) {
       WidgetsBinding.instance!.addObserver(this);
@@ -540,7 +564,7 @@ class RawEditorState extends EditorState
 
     _showCaretOnScreenScheduled = true;
     SchedulerBinding.instance!.addPostFrameCallback((_) {
-      if (widget.scrollable) {
+      if (widget.scrollable || _scrollController.hasClients) {
         _showCaretOnScreenScheduled = false;
 
         final renderEditor = getRenderEditor();
@@ -549,17 +573,18 @@ class RawEditorState extends EditorState
         }
 
         final viewport = RenderAbstractViewport.of(renderEditor);
-        final editorOffset = renderEditor.localToGlobal(const Offset(0, 0), ancestor: viewport);
-        final offsetInViewport = _scrollController!.offset + editorOffset.dy;
+        final editorOffset =
+            renderEditor.localToGlobal(const Offset(0, 0), ancestor: viewport);
+        final offsetInViewport = _scrollController.offset + editorOffset.dy;
 
         final offset = renderEditor.getOffsetToRevealCursor(
-          _scrollController!.position.viewportDimension,
-          _scrollController!.offset,
+          _scrollController.position.viewportDimension,
+          _scrollController.offset,
           offsetInViewport,
         );
 
         if (offset != null) {
-          _scrollController!.animateTo(
+          _scrollController.animateTo(
             offset,
             duration: const Duration(milliseconds: 100),
             curve: Curves.fastOutSlowIn,
@@ -583,6 +608,7 @@ class RawEditorState extends EditorState
   void requestKeyboard() {
     if (_hasFocus) {
       openConnectionIfNeeded();
+      _showCaretOnScreen();
     } else {
       widget.focusNode.requestFocus();
     }
@@ -593,12 +619,13 @@ class RawEditorState extends EditorState
     if (value.text == textEditingValue.text) {
       widget.controller.updateSelection(value.selection, ChangeSource.LOCAL);
     } else {
-      __setEditingValue(value);
+      _setEditingValue(value);
     }
   }
 
-  Future<void> __setEditingValue(TextEditingValue value) async {
-    if (await __isItCut(value)) {
+  // set editing value from clipboard for mobile
+  Future<void> _setEditingValue(TextEditingValue value) async {
+    if (await _isItCut(value)) {
       widget.controller.replaceText(
         textEditingValue.selection.start,
         textEditingValue.text.length - value.text.length,
@@ -609,26 +636,45 @@ class RawEditorState extends EditorState
       final value = textEditingValue;
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data != null) {
-        final length = textEditingValue.selection.end - textEditingValue.selection.start;
+        final length =
+            textEditingValue.selection.end - textEditingValue.selection.start;
+        var str = data.text!;
+        final codes = data.text!.codeUnits;
+        // For clip from editor, it may contain image, a.k.a 65532.
+        // For clip from browser, image is directly ignore.
+        // Here we skip image when pasting.
+        if (codes.contains(65532)) {
+          final sb = StringBuffer();
+          for (var i = 0; i < str.length; i++) {
+            if (str.codeUnitAt(i) == 65532) {
+              continue;
+            }
+            sb.write(str[i]);
+          }
+          str = sb.toString();
+        }
         widget.controller.replaceText(
           value.selection.start,
           length,
-          data.text,
+          str,
           value.selection,
         );
         // move cursor to the end of pasted text selection
         widget.controller.updateSelection(
-            TextSelection.collapsed(offset: value.selection.start + data.text!.length), ChangeSource.LOCAL);
+            TextSelection.collapsed(
+                offset: value.selection.start + data.text!.length),
+            ChangeSource.LOCAL);
       }
     }
   }
 
-  Future<bool> __isItCut(TextEditingValue value) async {
+  Future<bool> _isItCut(TextEditingValue value) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data == null) {
       return false;
     }
-    return textEditingValue.text.length - value.text.length == data.text!.length;
+    return textEditingValue.text.length - value.text.length ==
+        data.text!.length;
   }
 
   @override
@@ -696,7 +742,8 @@ class _Editor extends MultiChildRenderObjectWidget {
   }
 
   @override
-  void updateRenderObject(BuildContext context, covariant RenderEditor renderObject) {
+  void updateRenderObject(
+      BuildContext context, covariant RenderEditor renderObject) {
     renderObject
       ..document = document
       ..setContainer(document.root)

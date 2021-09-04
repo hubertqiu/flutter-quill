@@ -26,11 +26,7 @@ class Line extends Container<Leaf?> {
 
   /// Returns `true` if this line contains an embedded object.
   bool get hasEmbed {
-    if (childCount != 1) {
-      return false;
-    }
-
-    return children.single is Embed;
+    return children.any((child) => child is Embed);
   }
 
   /// Returns next [Line] or `null` if this is the last line in the document.
@@ -364,6 +360,38 @@ class Line extends Container<Leaf?> {
     if (remaining > 0) {
       final rest = nextLine!.collectStyle(0, remaining);
       _handle(rest);
+    }
+
+    return result;
+  }
+
+  /// Returns all styles for any character within the specified text range.
+  List<Style> collectAllStyles(int offset, int len) {
+    final local = math.min(length - offset, len);
+    final result = <Style>[];
+
+    final data = queryChild(offset, true);
+    var node = data.node as Leaf?;
+    if (node != null) {
+      result.add(node.style);
+      var pos = node.length - data.offset;
+      while (!node!.isLast && pos < local) {
+        node = node.next as Leaf?;
+        result.add(node!.style);
+        pos += node.length;
+      }
+    }
+
+    result.add(style);
+    if (parent is Block) {
+      final block = parent as Block;
+      result.add(block.style);
+    }
+
+    final remaining = len - local;
+    if (remaining > 0) {
+      final rest = nextLine!.collectAllStyles(0, remaining);
+      result.addAll(rest);
     }
 
     return result;
