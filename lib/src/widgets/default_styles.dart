@@ -1,6 +1,8 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:tuple/tuple.dart';
+import 'dart:io' show Platform;
 
 class QuillStyles extends InheritedWidget {
   const QuillStyles({
@@ -91,7 +93,7 @@ class DefaultStyles {
   final DefaultTextBlockStyle? leading;
 
   static DefaultStyles getInstance(BuildContext context) {
-    final themeData = Theme.of(context);
+    final themeData = CupertinoTheme.of(context);
     final defaultTextStyle = DefaultTextStyle.of(context);
     final baseStyle = defaultTextStyle.style.copyWith(
       fontSize: 16,
@@ -99,19 +101,12 @@ class DefaultStyles {
     );
     const baseSpacing = Tuple2<double, double>(6, 0);
     String fontFamily;
-    switch (themeData.platform) {
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-        fontFamily = 'Menlo';
-        break;
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.windows:
-      case TargetPlatform.linux:
-        fontFamily = 'Roboto Mono';
-        break;
-      default:
-        throw UnimplementedError();
+    if (Platform.isIOS || Platform.isMacOS) {
+      fontFamily = 'Menlo';
+    } else if (Platform.isAndroid || Platform.isFuchsia || Platform.isWindows || Platform.isLinux) {
+      fontFamily = 'Roboto Mono';
+    } else {
+      throw UnimplementedError();
     }
 
     return DefaultStyles(
@@ -145,15 +140,14 @@ class DefaultStyles {
             const Tuple2(8, 0),
             const Tuple2(0, 0),
             null),
-        paragraph: DefaultTextBlockStyle(
-            baseStyle, const Tuple2(0, 0), const Tuple2(0, 0), null),
+        paragraph: DefaultTextBlockStyle(baseStyle, const Tuple2(0, 0), const Tuple2(0, 0), null),
         bold: const TextStyle(fontWeight: FontWeight.bold),
         italic: const TextStyle(fontStyle: FontStyle.italic),
         small: const TextStyle(fontSize: 12, color: Colors.black45),
         underline: const TextStyle(decoration: TextDecoration.underline),
         strikeThrough: const TextStyle(decoration: TextDecoration.lineThrough),
         link: TextStyle(
-          color: themeData.accentColor,
+          color: themeData.primaryColor,
           decoration: TextDecoration.underline,
         ),
         placeHolder: DefaultTextBlockStyle(
@@ -165,8 +159,7 @@ class DefaultStyles {
             const Tuple2(0, 0),
             const Tuple2(0, 0),
             null),
-        lists: DefaultTextBlockStyle(
-            baseStyle, baseSpacing, const Tuple2(0, 6), null),
+        lists: DefaultTextBlockStyle(baseStyle, baseSpacing, const Tuple2(0, 6), null),
         quote: DefaultTextBlockStyle(
             TextStyle(color: baseStyle.color!.withOpacity(0.6)),
             baseSpacing,
@@ -189,12 +182,9 @@ class DefaultStyles {
               color: Colors.grey.shade50,
               borderRadius: BorderRadius.circular(2),
             )),
-        indent: DefaultTextBlockStyle(
-            baseStyle, baseSpacing, const Tuple2(0, 6), null),
-        align: DefaultTextBlockStyle(
-            baseStyle, const Tuple2(0, 0), const Tuple2(0, 0), null),
-        leading: DefaultTextBlockStyle(
-            baseStyle, const Tuple2(0, 0), const Tuple2(0, 0), null),
+        indent: DefaultTextBlockStyle(baseStyle, baseSpacing, const Tuple2(0, 6), null),
+        align: DefaultTextBlockStyle(baseStyle, const Tuple2(0, 0), const Tuple2(0, 0), null),
+        leading: DefaultTextBlockStyle(baseStyle, const Tuple2(0, 0), const Tuple2(0, 0), null),
         sizeSmall: const TextStyle(fontSize: 10),
         sizeLarge: const TextStyle(fontSize: 18),
         sizeHuge: const TextStyle(fontSize: 22));

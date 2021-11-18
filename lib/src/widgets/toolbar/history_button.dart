@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 import '../../../flutter_quill.dart';
 import 'quill_icon_button.dart';
@@ -23,14 +23,14 @@ class HistoryButton extends StatefulWidget {
 
 class _HistoryButtonState extends State<HistoryButton> {
   Color? _iconColor;
-  late ThemeData theme;
+  late CupertinoThemeData theme;
 
   @override
   Widget build(BuildContext context) {
-    theme = Theme.of(context);
+    theme = CupertinoTheme.of(context);
     _setIconColor();
 
-    final fillColor = theme.canvasColor;
+    final fillColor = theme.scaffoldBackgroundColor;
     widget.controller.changes.listen((event) async {
       _setIconColor();
     });
@@ -49,15 +49,11 @@ class _HistoryButtonState extends State<HistoryButton> {
 
     if (widget.undo) {
       setState(() {
-        _iconColor = widget.controller.hasUndo
-            ? theme.iconTheme.color
-            : theme.disabledColor;
+        _iconColor = widget.controller.hasUndo ? theme.primaryColor : theme.primaryColor.withOpacity(0.3);
       });
     } else {
       setState(() {
-        _iconColor = widget.controller.hasRedo
-            ? theme.iconTheme.color
-            : theme.disabledColor;
+        _iconColor = widget.controller.hasRedo ? theme.primaryColor : theme.primaryColor.withOpacity(0.3);
       });
     }
   }

@@ -1,10 +1,16 @@
 import 'dart:io';
 
+<<<<<<< HEAD
+=======
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+>>>>>>> litela_editor
 import 'package:flutter/material.dart';
 
 import '../models/documents/attribute.dart';
 import '../utils/media_pick_setting.dart';
 import 'controller.dart';
+import 'divider.dart';
 import 'toolbar/arrow_indicated_button_list.dart';
 import 'toolbar/camera_button.dart';
 import 'toolbar/clear_format_button.dart';
@@ -217,11 +223,8 @@ class QuillToolbar extends StatelessWidget implements PreferredSizeWidget {
               webImagePickImpl: webImagePickImpl,
               webVideoPickImpl: webVideoPickImpl),
         if (isButtonGroupShown[0] &&
-            (isButtonGroupShown[1] ||
-                isButtonGroupShown[2] ||
-                isButtonGroupShown[3] ||
-                isButtonGroupShown[4]))
-          VerticalDivider(
+            (isButtonGroupShown[1] || isButtonGroupShown[2] || isButtonGroupShown[3] || isButtonGroupShown[4]))
+          MagicVerticalDivider(
             indent: 12,
             endIndent: 12,
             color: Colors.grey.shade400,
@@ -231,11 +234,8 @@ class QuillToolbar extends StatelessWidget implements PreferredSizeWidget {
             controller: controller,
             iconSize: toolbarIconSize,
           ),
-        if (isButtonGroupShown[1] &&
-            (isButtonGroupShown[2] ||
-                isButtonGroupShown[3] ||
-                isButtonGroupShown[4]))
-          VerticalDivider(
+        if (isButtonGroupShown[1] && (isButtonGroupShown[2] || isButtonGroupShown[3] || isButtonGroupShown[4]))
+          MagicVerticalDivider(
             indent: 12,
             endIndent: 12,
             color: Colors.grey.shade400,
@@ -268,9 +268,8 @@ class QuillToolbar extends StatelessWidget implements PreferredSizeWidget {
             icon: Icons.code,
             iconSize: toolbarIconSize,
           ),
-        if (isButtonGroupShown[2] &&
-            (isButtonGroupShown[3] || isButtonGroupShown[4]))
-          VerticalDivider(
+        if (isButtonGroupShown[2] && (isButtonGroupShown[3] || isButtonGroupShown[4]))
+          MagicVerticalDivider(
             indent: 12,
             endIndent: 12,
             color: Colors.grey.shade400,
@@ -297,7 +296,7 @@ class QuillToolbar extends StatelessWidget implements PreferredSizeWidget {
             isIncrease: false,
           ),
         if (isButtonGroupShown[3] && isButtonGroupShown[4])
-          VerticalDivider(
+          MagicVerticalDivider(
             indent: 12,
             endIndent: 12,
             color: Colors.grey.shade400,
@@ -334,6 +333,7 @@ class QuillToolbar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+<<<<<<< HEAD
     if (multiRowsDisplay ?? true) {
       return Wrap(
         alignment: WrapAlignment.center,
@@ -342,9 +342,12 @@ class QuillToolbar extends StatelessWidget implements PreferredSizeWidget {
         children: children,
       );
     }
+=======
+    final theme = CupertinoTheme.of(context);
+>>>>>>> litela_editor
     return Container(
       constraints: BoxConstraints.tightFor(height: preferredSize.height),
-      color: color ?? Theme.of(context).canvasColor,
+      color: color ?? theme.barBackgroundColor,
       child: ArrowIndicatedButtonList(buttons: children),
     );
   }

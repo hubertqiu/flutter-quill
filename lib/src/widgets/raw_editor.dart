@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -20,7 +19,7 @@ import 'cursor.dart';
 import 'default_styles.dart';
 import 'delegate.dart';
 import 'editor.dart';
-import 'keyboard_listener.dart';
+import 'keyboard_listener.dart' as fq;
 import 'proxy.dart';
 import 'raw_editor/raw_editor_state_keyboard_mixin.dart';
 import 'raw_editor/raw_editor_state_selection_delegate_mixin.dart';
@@ -60,8 +59,7 @@ class RawEditor extends StatefulWidget {
     this.customStyleBuilder,
   )   : assert(maxHeight == null || maxHeight > 0, 'maxHeight cannot be null'),
         assert(minHeight == null || minHeight >= 0, 'minHeight cannot be null'),
-        assert(maxHeight == null || minHeight == null || maxHeight >= minHeight,
-            'maxHeight cannot be null'),
+        assert(maxHeight == null || minHeight == null || maxHeight >= minHeight, 'maxHeight cannot be null'),
         showCursor = showCursor ?? true,
         super(key: key);
 
@@ -106,7 +104,7 @@ class RawEditorState extends EditorState
   final GlobalKey _editorKey = GlobalKey();
 
   // Keyboard
-  late KeyboardListener _keyboardListener;
+  late fq.KeyboardListener _keyboardListener;
   KeyboardVisibilityController? _keyboardVisibilityController;
   StreamSubscription<bool>? _keyboardVisibilitySubscription;
   bool _keyboardVisible = false;
@@ -143,9 +141,14 @@ class RawEditorState extends EditorState
     super.build(context);
 
     var _doc = widget.controller.document;
+<<<<<<< HEAD
     if (_doc.isEmpty() && widget.placeholder != null) {
       _doc = Document.fromJson(jsonDecode(
           '[{"attributes":{"placeholder":true},"insert":"${widget.placeholder}\\n"}]'));
+=======
+    if (_doc.isEmpty() && !widget.focusNode.hasFocus && widget.placeholder != null) {
+      _doc = Document.fromJson(jsonDecode('[{"attributes":{"placeholder":true},"insert":"${widget.placeholder}\\n"}]'));
+>>>>>>> litela_editor
     }
 
     Widget child = CompositedTransformTarget(
@@ -168,8 +171,7 @@ class RawEditorState extends EditorState
     );
 
     if (widget.scrollable) {
-      final baselinePadding =
-          EdgeInsets.only(top: _styles!.paragraph!.verticalSpacing.item1);
+      final baselinePadding = EdgeInsets.only(top: _styles!.paragraph!.verticalSpacing.item1);
       child = BaselineProxy(
         textStyle: _styles!.paragraph!.style,
         padding: baselinePadding,
@@ -183,9 +185,7 @@ class RawEditorState extends EditorState
 
     final constraints = widget.expands
         ? const BoxConstraints.expand()
-        : BoxConstraints(
-            minHeight: widget.minHeight ?? 0.0,
-            maxHeight: widget.maxHeight ?? double.infinity);
+        : BoxConstraints(minHeight: widget.minHeight ?? 0.0, maxHeight: widget.maxHeight ?? double.infinity);
 
     return QuillStyles(
       data: _styles!,
@@ -199,8 +199,7 @@ class RawEditorState extends EditorState
     );
   }
 
-  void _handleSelectionChanged(
-      TextSelection selection, SelectionChangedCause cause) {
+  void _handleSelectionChanged(TextSelection selection, SelectionChangedCause cause) {
     widget.controller.updateSelection(selection, ChangeSource.LOCAL);
 
     _selectionOverlay?.handlesVisible = _shouldShowSelectionHandles();
@@ -232,6 +231,7 @@ class RawEditorState extends EditorState
       } else if (node is Block) {
         final attrs = node.style.attributes;
         final editableTextBlock = EditableTextBlock(
+<<<<<<< HEAD
             block: node,
             textDirection: _textDirection,
             scrollBottomInset: widget.scrollBottomInset,
@@ -250,6 +250,23 @@ class RawEditorState extends EditorState
             onCheckboxTap: _handleCheckboxTap,
             readOnly: widget.readOnly,
             customStyleBuilder: widget.customStyleBuilder);
+=======
+          node,
+          _textDirection,
+          widget.scrollBottomInset,
+          _getVerticalSpacingForBlock(node, _styles),
+          widget.controller.selection,
+          widget.selectionColor,
+          _styles,
+          widget.enableInteractiveSelection,
+          _hasFocus,
+          attrs.containsKey(Attribute.codeBlock.key) ? const EdgeInsets.all(16) : null,
+          widget.embedBuilder,
+          _cursorCont,
+          indentLevelCounts,
+          _handleCheckboxTap,
+        );
+>>>>>>> litela_editor
         result.add(editableTextBlock);
       } else {
         throw StateError('Unreachable.');
@@ -258,8 +275,7 @@ class RawEditorState extends EditorState
     return result;
   }
 
-  EditableTextLine _getEditableTextLineFromNode(
-      Line node, BuildContext context) {
+  EditableTextLine _getEditableTextLineFromNode(Line node, BuildContext context) {
     final textLine = TextLine(
       line: node,
       textDirection: _textDirection,
@@ -284,8 +300,7 @@ class RawEditorState extends EditorState
     return editableTextLine;
   }
 
-  Tuple2<double, double> _getVerticalSpacingForLine(
-      Line line, DefaultStyles? defaultStyles) {
+  Tuple2<double, double> _getVerticalSpacingForLine(Line line, DefaultStyles? defaultStyles) {
     final attrs = line.style.attributes;
     if (attrs.containsKey(Attribute.header.key)) {
       final int? level = attrs[Attribute.header.key]!.value;
@@ -304,8 +319,7 @@ class RawEditorState extends EditorState
     return defaultStyles!.paragraph!.verticalSpacing;
   }
 
-  Tuple2<double, double> _getVerticalSpacingForBlock(
-      Block node, DefaultStyles? defaultStyles) {
+  Tuple2<double, double> _getVerticalSpacingForBlock(Block node, DefaultStyles? defaultStyles) {
     final attrs = node.style.attributes;
     if (attrs.containsKey(Attribute.blockQuote.key)) {
       return defaultStyles!.quote!.verticalSpacing;
@@ -336,7 +350,7 @@ class RawEditorState extends EditorState
       tickerProvider: this,
     );
 
-    _keyboardListener = KeyboardListener(
+    _keyboardListener = fq.KeyboardListener(
       handleCursorMovement,
       handleShortcut,
       handleDelete,
@@ -350,8 +364,7 @@ class RawEditorState extends EditorState
     } else {
       _keyboardVisibilityController = KeyboardVisibilityController();
       _keyboardVisible = _keyboardVisibilityController!.isVisible;
-      _keyboardVisibilitySubscription =
-          _keyboardVisibilityController?.onChange.listen((visible) {
+      _keyboardVisibilitySubscription = _keyboardVisibilityController?.onChange.listen((visible) {
         _keyboardVisible = visible;
         if (visible) {
           _onChangeTextEditingValue();
@@ -359,8 +372,8 @@ class RawEditorState extends EditorState
       });
     }
 
-    _focusAttachment = widget.focusNode.attach(context,
-        onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
+    _focusAttachment =
+        widget.focusNode.attach(context, onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
     widget.focusNode.addListener(_handleFocusChanged);
   }
 
@@ -369,9 +382,7 @@ class RawEditorState extends EditorState
     super.didChangeDependencies();
     final parentStyles = QuillStyles.getStyles(context, true);
     final defaultStyles = DefaultStyles.getInstance(context);
-    _styles = (parentStyles != null)
-        ? defaultStyles.merge(parentStyles)
-        : defaultStyles;
+    _styles = (parentStyles != null) ? defaultStyles.merge(parentStyles) : defaultStyles;
 
     if (widget.customStyles != null) {
       _styles = _styles!.merge(widget.customStyles!);
@@ -405,8 +416,8 @@ class RawEditorState extends EditorState
     if (widget.focusNode != oldWidget.focusNode) {
       oldWidget.focusNode.removeListener(_handleFocusChanged);
       _focusAttachment?.detach();
-      _focusAttachment = widget.focusNode.attach(context,
-          onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
+      _focusAttachment =
+          widget.focusNode.attach(context, onKey: (node, event) => _keyboardListener.handleRawKeyEvent(event));
       widget.focusNode.addListener(_handleFocusChanged);
       updateKeepAlive();
     }
@@ -426,8 +437,7 @@ class RawEditorState extends EditorState
   }
 
   bool _shouldShowSelectionHandles() {
-    return widget.showSelectionHandles &&
-        !widget.controller.selection.isCollapsed;
+    return widget.showSelectionHandles && !widget.controller.selection.isCollapsed;
   }
 
   @override
@@ -479,8 +489,7 @@ class RawEditorState extends EditorState
       return;
     }
     _showCaretOnScreen();
-    _cursorCont.startOrStopCursorTimerIfNeeded(
-        _hasFocus, widget.controller.selection);
+    _cursorCont.startOrStopCursorTimerIfNeeded(_hasFocus, widget.controller.selection);
     if (hasConnection) {
       _cursorCont
         ..stopCursorTimer(resetCharTicks: false)
@@ -535,8 +544,7 @@ class RawEditorState extends EditorState
 
   void _handleFocusChanged() {
     openOrCloseConnection();
-    _cursorCont.startOrStopCursorTimerIfNeeded(
-        _hasFocus, widget.controller.selection);
+    _cursorCont.startOrStopCursorTimerIfNeeded(_hasFocus, widget.controller.selection);
     _updateOrDisposeSelectionOverlayIfNeeded();
     if (_hasFocus) {
       WidgetsBinding.instance!.addObserver(this);
@@ -573,9 +581,14 @@ class RawEditorState extends EditorState
         }
 
         final viewport = RenderAbstractViewport.of(renderEditor);
+<<<<<<< HEAD
         final editorOffset =
             renderEditor.localToGlobal(const Offset(0, 0), ancestor: viewport);
         final offsetInViewport = _scrollController.offset + editorOffset.dy;
+=======
+        final editorOffset = renderEditor.localToGlobal(const Offset(0, 0), ancestor: viewport);
+        final offsetInViewport = _scrollController!.offset + editorOffset.dy;
+>>>>>>> litela_editor
 
         final offset = renderEditor.getOffsetToRevealCursor(
           _scrollController.position.viewportDimension,
@@ -636,6 +649,7 @@ class RawEditorState extends EditorState
       final value = textEditingValue;
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data != null) {
+<<<<<<< HEAD
         final length =
             textEditingValue.selection.end - textEditingValue.selection.start;
         var str = data.text!;
@@ -653,6 +667,9 @@ class RawEditorState extends EditorState
           }
           str = sb.toString();
         }
+=======
+        final length = textEditingValue.selection.end - textEditingValue.selection.start;
+>>>>>>> litela_editor
         widget.controller.replaceText(
           value.selection.start,
           length,
@@ -661,9 +678,7 @@ class RawEditorState extends EditorState
         );
         // move cursor to the end of pasted text selection
         widget.controller.updateSelection(
-            TextSelection.collapsed(
-                offset: value.selection.start + data.text!.length),
-            ChangeSource.LOCAL);
+            TextSelection.collapsed(offset: value.selection.start + data.text!.length), ChangeSource.LOCAL);
       }
     }
   }
@@ -673,8 +688,7 @@ class RawEditorState extends EditorState
     if (data == null) {
       return false;
     }
-    return textEditingValue.text.length - value.text.length ==
-        data.text!.length;
+    return textEditingValue.text.length - value.text.length == data.text!.length;
   }
 
   @override
@@ -742,8 +756,7 @@ class _Editor extends MultiChildRenderObjectWidget {
   }
 
   @override
-  void updateRenderObject(
-      BuildContext context, covariant RenderEditor renderObject) {
+  void updateRenderObject(BuildContext context, covariant RenderEditor renderObject) {
     renderObject
       ..document = document
       ..setContainer(document.root)

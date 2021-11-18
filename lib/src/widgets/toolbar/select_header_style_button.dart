@@ -1,5 +1,5 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 
 import '../../models/documents/attribute.dart';
 import '../../models/documents/style.dart';
@@ -17,8 +17,7 @@ class SelectHeaderStyleButton extends StatefulWidget {
   final double iconSize;
 
   @override
-  _SelectHeaderStyleButtonState createState() =>
-      _SelectHeaderStyleButtonState();
+  _SelectHeaderStyleButtonState createState() => _SelectHeaderStyleButtonState();
 }
 
 class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
@@ -30,8 +29,7 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
   void initState() {
     super.initState();
     setState(() {
-      _value =
-          _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
+      _value = _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
     });
     widget.controller.addListener(_didChangeEditingValue);
   }
@@ -45,15 +43,10 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
       Attribute.h3: 'H3',
     };
 
-    final _valueAttribute = <Attribute>[
-      Attribute.header,
-      Attribute.h1,
-      Attribute.h2,
-      Attribute.h3
-    ];
+    final _valueAttribute = <Attribute>[Attribute.header, Attribute.h1, Attribute.h2, Attribute.h3];
     final _valueString = <String>['N', 'H1', 'H2', 'H3'];
 
-    final theme = Theme.of(context);
+    final theme = CupertinoTheme.of(context);
     final style = TextStyle(
       fontWeight: FontWeight.w600,
       fontSize: widget.iconSize * 0.7,
@@ -69,24 +62,19 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
               width: widget.iconSize * kIconButtonFactor,
               height: widget.iconSize * kIconButtonFactor,
             ),
-            child: RawMaterialButton(
-              hoverElevation: 0,
-              highlightElevation: 0,
-              elevation: 0,
-              visualDensity: VisualDensity.compact,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(2)),
-              fillColor: _valueToText[_value] == _valueString[index]
-                  ? theme.toggleableActiveColor
-                  : theme.canvasColor,
-              onPressed: () =>
-                  widget.controller.formatSelection(_valueAttribute[index]),
-              child: Text(
-                _valueString[index],
-                style: style.copyWith(
-                  color: _valueToText[_value] == _valueString[index]
-                      ? theme.primaryIconTheme.color
-                      : theme.iconTheme.color,
+            child: GestureDetector(
+              onTap: () => widget.controller.formatSelection(_valueAttribute[index]),
+              child: Container(
+                color: _valueToText[_value] == _valueString[index] ? theme.primaryColor : theme.barBackgroundColor,
+                child: Center(
+                  child: Text(
+                    _valueString[index],
+                    style: style.copyWith(
+                      color: _valueToText[_value] == _valueString[index]
+                          ? theme.textTheme.textStyle.color
+                          : theme.primaryColor,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -98,8 +86,7 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
 
   void _didChangeEditingValue() {
     setState(() {
-      _value =
-          _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
+      _value = _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
     });
   }
 
@@ -109,8 +96,7 @@ class _SelectHeaderStyleButtonState extends State<SelectHeaderStyleButton> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_didChangeEditingValue);
       widget.controller.addListener(_didChangeEditingValue);
-      _value =
-          _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
+      _value = _selectionStyle.attributes[Attribute.header.key] ?? Attribute.header;
     }
   }
 

@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../models/documents/nodes/embed.dart';
 import '../controller.dart';
@@ -28,9 +29,9 @@ class InsertEmbedButton extends StatelessWidget {
       icon: Icon(
         icon,
         size: iconSize,
-        color: Theme.of(context).iconTheme.color,
+        color: CupertinoTheme.of(context).primaryColor,
       ),
-      fillColor: fillColor ?? Theme.of(context).canvasColor,
+      fillColor: fillColor ?? CupertinoTheme.of(context).scaffoldBackgroundColor,
       onPressed: () {
         final index = controller.selection.baseOffset;
         final length = controller.selection.extentOffset - index;

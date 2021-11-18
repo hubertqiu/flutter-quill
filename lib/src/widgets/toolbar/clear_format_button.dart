@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../flutter_quill.dart';
@@ -23,9 +24,9 @@ class ClearFormatButton extends StatefulWidget {
 class _ClearFormatButtonState extends State<ClearFormatButton> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final iconColor = theme.iconTheme.color;
-    final fillColor = theme.canvasColor;
+    final theme = CupertinoTheme.of(context);
+    final iconColor = theme.primaryColor;
+    final fillColor = theme.barBackgroundColor;
     return QuillIconButton(
         highlightElevation: 0,
         hoverElevation: 0,
@@ -33,6 +34,7 @@ class _ClearFormatButtonState extends State<ClearFormatButton> {
         icon: Icon(widget.icon, size: widget.iconSize, color: iconColor),
         fillColor: fillColor,
         onPressed: () {
+<<<<<<< HEAD
           final attrs = <Attribute>{};
           for (final style in widget.controller.getAllSelectionStyles()) {
             for (final attr in style.attributes.values) {
@@ -41,6 +43,10 @@ class _ClearFormatButtonState extends State<ClearFormatButton> {
           }
           for (final attr in attrs) {
             widget.controller.formatSelection(Attribute.clone(attr, null));
+=======
+          for (final k in widget.controller.getSelectionStyle().attributes.values) {
+            widget.controller.formatSelection(Attribute.clone(k, null));
+>>>>>>> litela_editor
           }
         });
   }

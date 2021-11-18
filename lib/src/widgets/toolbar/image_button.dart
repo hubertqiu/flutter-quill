@@ -1,24 +1,26 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/documents/nodes/embed.dart';
-import '../../utils/media_pick_setting.dart';
 import '../controller.dart';
-import '../link_dialog.dart';
 import '../toolbar.dart';
-import 'image_video_utils.dart';
 import 'quill_icon_button.dart';
 
 class ImageButton extends StatelessWidget {
   const ImageButton({
     required this.icon,
     required this.controller,
+    required this.imageSource,
     this.iconSize = kDefaultIconSize,
-    this.onImagePickCallback,
     this.fillColor,
+    this.onImagePickCallback,
+    this.imagePickImpl,
     this.filePickImpl,
-    this.webImagePickImpl,
-    this.mediaPickSettingSelector,
     Key? key,
   }) : super(key: key);
 
@@ -31,65 +33,74 @@ class ImageButton extends StatelessWidget {
 
   final OnImagePickCallback? onImagePickCallback;
 
-  final WebImagePickImpl? webImagePickImpl;
+  final ImagePickImpl? imagePickImpl;
+
+  final ImageSource imageSource;
 
   final FilePickImpl? filePickImpl;
 
-  final MediaPickSettingSelector? mediaPickSettingSelector;
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return QuillIconButton(
-      icon: Icon(icon, size: iconSize, color: theme.iconTheme.color),
+      icon: Icon(icon, size: iconSize, color: CupertinoTheme.of(context).primaryColor),
       highlightElevation: 0,
       hoverElevation: 0,
       size: iconSize * 1.77,
-      fillColor: fillColor ?? theme.canvasColor,
-      onPressed: () => _onPressedHandler(context),
+      fillColor: fillColor ?? CupertinoTheme.of(context).barBackgroundColor,
+      onPressed: () => _handleImageButtonTap(context, filePickImpl),
     );
   }
 
-  Future<void> _onPressedHandler(BuildContext context) async {
-    if (onImagePickCallback != null) {
-      final selector =
-          mediaPickSettingSelector ?? ImageVideoUtils.selectMediaPickSetting;
-      final source = await selector(context);
-      if (source != null) {
-        if (source == MediaPickSetting.Gallery) {
-          _pickImage(context);
-        } else {
-          _typeLink(context);
-        }
-      }
+  Future<void> _handleImageButtonTap(BuildContext context, [FilePickImpl? filePickImpl]) async {
+    final index = controller.selection.baseOffset;
+    final length = controller.selection.extentOffset - index;
+
+    String? imageUrl;
+    if (imagePickImpl != null) {
+      imageUrl = await imagePickImpl!(imageSource);
     } else {
-      _typeLink(context);
+      if (kIsWeb) {
+        imageUrl = await _pickImageWeb();
+      } else if (Platform.isAndroid || Platform.isIOS) {
+        imageUrl = await _pickImage(imageSource);
+      } else {
+        assert(filePickImpl != null, 'Desktop must provide filePickImpl');
+        imageUrl = await _pickImageDesktop(context, filePickImpl!);
+      }
+    }
+
+    if (imageUrl != null) {
+      controller.replaceText(index, length, BlockEmbed.image(imageUrl), null);
     }
   }
 
-  void _pickImage(BuildContext context) => ImageVideoUtils.handleImageButtonTap(
-        context,
-        controller,
-        ImageSource.gallery,
-        onImagePickCallback!,
-        filePickImpl: filePickImpl,
-        webImagePickImpl: webImagePickImpl,
-      );
+  Future<String?> _pickImageWeb() async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null) {
+      return null;
+    }
 
-  void _typeLink(BuildContext context) {
-    showDialog<String>(
-      context: context,
-      builder: (_) => const LinkDialog(),
-    ).then(_linkSubmitted);
+    // Take first, because we don't allow picking multiple files.
+    final fileName = result.files.first.name;
+    final file = File(fileName);
+
+    return onImagePickCallback!(file);
   }
 
-  void _linkSubmitted(String? value) {
-    if (value != null && value.isNotEmpty) {
-      final index = controller.selection.baseOffset;
-      final length = controller.selection.extentOffset - index;
-
-      controller.replaceText(index, length, BlockEmbed.image(value), null);
+  Future<String?> _pickImage(ImageSource source) async {
+    final pickedFile = await ImagePicker().getImage(source: source);
+    if (pickedFile == null) {
+      return null;
     }
+
+    return onImagePickCallback!(File(pickedFile.path));
+  }
+
+  Future<String?> _pickImageDesktop(BuildContext context, FilePickImpl filePickImpl) async {
+    final filePath = await filePickImpl(context);
+    if (filePath == null || filePath.isEmpty) return null;
+
+    final file = File(filePath);
+    return onImagePickCallback!(file);
   }
 }

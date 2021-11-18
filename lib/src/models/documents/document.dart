@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:tuple/tuple.dart';
 
 import '../quill_delta.dart';
 import '../rules/rule.dart';
 import 'attribute.dart';
+import 'convertor/delta_convertor.dart';
 import 'history.dart';
 import 'nodes/block.dart';
 import 'nodes/container.dart';
@@ -38,20 +40,29 @@ class Document {
 
   Delta toDelta() => Delta.from(_delta);
 
+  String toMarkdown() {
+    final jsonString = jsonEncode(Delta.from(_delta).toJson());
+    final markdown = DeltaConvertor(jsonString).convert();
+    return markdown;
+  }
+
   final Rules _rules = Rules.getInstance();
 
   void setCustomRules(List<Rule> customRules) {
     _rules.setCustomRules(customRules);
   }
 
-  final StreamController<Tuple3<Delta, Delta, ChangeSource>> _observer =
-      StreamController.broadcast();
+  final StreamController<Tuple3<Delta, Delta, ChangeSource>> _observer = StreamController.broadcast();
 
   final History _history = History();
 
   Stream<Tuple3<Delta, Delta, ChangeSource>> get changes => _observer.stream;
 
+<<<<<<< HEAD
   Delta insert(int index, Object? data, {int replaceLength = 0}) {
+=======
+  Delta insert(int index, Object? data, {int replaceLength = 0, bool autoAppendNewlineAfterImage = true}) {
+>>>>>>> litela_editor
     assert(index >= 0);
     assert(data is String || data is Embeddable);
     if (data is Embeddable) {
@@ -60,9 +71,14 @@ class Document {
       return Delta();
     }
 
+<<<<<<< HEAD
     final delta = _rules.apply(RuleType.INSERT, this, index,
         data: data, len: replaceLength);
     compose(delta, ChangeSource.LOCAL);
+=======
+    final delta = _rules.apply(RuleType.INSERT, this, index, data: data, len: replaceLength);
+    compose(delta, ChangeSource.LOCAL, autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
+>>>>>>> litela_editor
     return delta;
   }
 
@@ -75,7 +91,11 @@ class Document {
     return delta;
   }
 
+<<<<<<< HEAD
   Delta replace(int index, int len, Object? data) {
+=======
+  Delta replace(int index, int len, Object? data, {bool autoAppendNewlineAfterImage = true}) {
+>>>>>>> litela_editor
     assert(index >= 0);
     assert(data is String || data is Embeddable);
 
@@ -88,7 +108,11 @@ class Document {
     // We have to insert before applying delete rules
     // Otherwise delete would be operating on stale document snapshot.
     if (dataIsNotEmpty) {
+<<<<<<< HEAD
       delta = insert(index, data, replaceLength: len);
+=======
+      delta = insert(index, data, replaceLength: len, autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
+>>>>>>> litela_editor
     }
 
     if (len > 0) {
@@ -104,8 +128,7 @@ class Document {
 
     var delta = Delta();
 
-    final formatDelta = _rules.apply(RuleType.FORMAT, this, index,
-        len: len, attribute: attribute);
+    final formatDelta = _rules.apply(RuleType.FORMAT, this, index, len: len, attribute: attribute);
     if (formatDelta.isNotEmpty) {
       compose(formatDelta, ChangeSource.LOCAL);
       delta = delta.compose(formatDelta);
@@ -136,17 +159,24 @@ class Document {
     return block.queryChild(res.offset, true);
   }
 
+<<<<<<< HEAD
   void compose(Delta delta, ChangeSource changeSource) {
+=======
+  void compose(Delta delta, ChangeSource changeSource, {bool autoAppendNewlineAfterImage = true}) {
+>>>>>>> litela_editor
     assert(!_observer.isClosed);
     delta.trim();
     assert(delta.isNotEmpty);
 
     var offset = 0;
+<<<<<<< HEAD
     delta = _transform(delta);
+=======
+    delta = _transform(delta, autoAppendNewlineAfterImage: autoAppendNewlineAfterImage);
+>>>>>>> litela_editor
     final originalDelta = toDelta();
     for (final op in delta.toList()) {
-      final style =
-          op.attributes != null ? Style.fromJson(op.attributes) : null;
+      final style = op.attributes != null ? Style.fromJson(op.attributes) : null;
 
       if (op.isInsert) {
         _root.insert(offset, _normalize(op.data), style);
@@ -186,7 +216,11 @@ class Document {
 
   bool get hasRedo => _history.hasRedo;
 
+<<<<<<< HEAD
   static Delta _transform(Delta delta) {
+=======
+  static Delta _transform(Delta delta, {bool autoAppendNewlineAfterImage = true}) {
+>>>>>>> litela_editor
     final res = Delta();
     final ops = delta.toList();
     for (var i = 0; i < ops.length; i++) {
@@ -197,6 +231,7 @@ class Document {
     return res;
   }
 
+<<<<<<< HEAD
   static void _autoAppendNewlineAfterEmbeddable(
       int i, List<Operation> ops, Operation op, Delta res, String type) {
     final nextOpIsEmbed = i + 1 < ops.length &&
@@ -207,6 +242,11 @@ class Document {
         op.data is String &&
         (op.data as String).isNotEmpty &&
         !(op.data as String).endsWith('\n')) {
+=======
+  static void _autoAppendNewlineAfterImage(int i, List<Operation> ops, Operation op, Delta res) {
+    final nextOpIsImage = i + 1 < ops.length && ops[i + 1].isInsert && ops[i + 1].data is! String;
+    if (nextOpIsImage && op.data is String && (op.data as String).isNotEmpty && !(op.data as String).endsWith('\n')) {
+>>>>>>> litela_editor
       res.push(Operation.insert('\n'));
     }
     // embed could be image or video
@@ -250,20 +290,15 @@ class Document {
     var offset = 0;
     for (final op in doc.toList()) {
       if (!op.isInsert) {
-        throw ArgumentError.value(doc,
-            'Document can only contain insert operations but ${op.key} found.');
+        throw ArgumentError.value(doc, 'Document can only contain insert operations but ${op.key} found.');
       }
-      final style =
-          op.attributes != null ? Style.fromJson(op.attributes) : null;
+      final style = op.attributes != null ? Style.fromJson(op.attributes) : null;
       final data = _normalize(op.data);
       _root.insert(offset, data, style);
       offset += op.length!;
     }
     final node = _root.last;
-    if (node is Line &&
-        node.parent is! Block &&
-        node.style.isEmpty &&
-        _root.childCount > 1) {
+    if (node is Line && node.parent is! Block && node.style.isEmpty && _root.childCount > 1) {
       _root.remove(node);
     }
   }
@@ -279,9 +314,7 @@ class Document {
     }
 
     final delta = node.toDelta();
-    return delta.length == 1 &&
-        delta.first.data == '\n' &&
-        delta.first.key == 'insert';
+    return delta.length == 1 && delta.first.data == '\n' && delta.first.key == 'insert';
   }
 }
 
